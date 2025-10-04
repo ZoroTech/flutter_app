@@ -1,6 +1,6 @@
 # mini_project_approval
 
-A new Flutter project.
+A NEW Flutter project.
 
 ## Getting Started
 
