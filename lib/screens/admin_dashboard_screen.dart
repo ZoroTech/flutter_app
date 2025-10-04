@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../services/auth_service.dart';
 import '../services/database_service.dart';
 import '../models/teacher_model.dart';
@@ -142,15 +143,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 }
 
                 try {
-                  final authService =
-                      Provider.of<AuthService>(context, listen: false);
                   final dbService =
                       Provider.of<DatabaseService>(context, listen: false);
+                  final currentUser = FirebaseAuth.instance.currentUser;
 
                   final userCredential =
-                      await authService.registerWithEmailPassword(
-                    email,
-                    password,
+                      await FirebaseAuth.instance.createUserWithEmailAndPassword(
+                    email: email,
+                    password: password,
                   );
 
                   final teacher = TeacherModel(
@@ -161,6 +161,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
                   await dbService.addTeacher(teacher);
 
+                  await FirebaseAuth.instance.signOut();
+                  if (currentUser != null) {
+                    await FirebaseAuth.instance.signInWithEmailAndPassword(
+                      email: currentUser.email!,
+                      password: 'admin123',
+                    );
+                  }
+
                   if (mounted) {
                     Navigator.pop(context);
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -169,7 +177,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         backgroundColor: Colors.green,
                       ),
                     );
-                    _loadTeachers();
+                    await _loadTeachers();
                   }
                 } catch (e) {
                   if (mounted) {

@@ -7,38 +7,6 @@ import '../models/project_model.dart';
 class DatabaseService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  Future<void> initializeTeachers() async {
-    try {
-      final teachersSnapshot = await _db.collection('teachers').get();
-
-      if (teachersSnapshot.docs.isEmpty) {
-        final teachers = [
-          {
-            'email': 'teacher1@pvppcoe.ac.in',
-            'name': 'Dr. Rajesh Kumar',
-            'uid': 'teacher1_uid',
-          },
-          {
-            'email': 'teacher2@pvppcoe.ac.in',
-            'name': 'Prof. Priya Sharma',
-            'uid': 'teacher2_uid',
-          },
-          {
-            'email': 'teacher3@pvppcoe.ac.in',
-            'name': 'Dr. Amit Patel',
-            'uid': 'teacher3_uid',
-          },
-        ];
-
-        for (var teacher in teachers) {
-          await _db.collection('teachers').doc(teacher['uid'] as String).set(teacher);
-        }
-      }
-    } catch (e) {
-      print('Error initializing teachers: $e');
-    }
-  }
-
   Future<void> saveStudent(StudentModel student) async {
     await _db.collection('students').doc(student.uid).set(student.toMap());
   }

@@ -12,9 +12,6 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  final dbService = DatabaseService();
-  await dbService.initializeTeachers();
-
   runApp(const MyApp());
 }
 
