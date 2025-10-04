@@ -67,6 +67,11 @@ class DatabaseService {
   }
 
   Future<void> submitProject(ProjectModel project) async {
+    final existingProjects = await getProjectsForStudent(project.studentUid);
+    if (existingProjects.length >= 4) {
+      throw Exception('Maximum 4 project submissions allowed');
+    }
+
     final docRef = await _db.collection('projects').add(project.toMap());
     await docRef.update({'id': docRef.id});
   }
@@ -110,6 +115,40 @@ class DatabaseService {
     }
 
     await _db.collection('projects').doc(projectId).update(updateData);
+
+    if (status == 'approved') {
+      final projectDoc = await _db.collection('projects').doc(projectId).get();
+      if (projectDoc.exists) {
+        final project = ProjectModel.fromMap(projectDoc.data()!);
+        await _saveToApprovedProjects(project);
+      }
+    }
+  }
+
+  Future<void> _saveToApprovedProjects(ProjectModel project) async {
+    final approvedData = {
+      'topic': project.topic,
+      'description': project.description,
+      'domain': project.domain,
+      'year': project.year,
+      'semester': project.semester,
+      'studentName': project.studentName,
+      'teacherName': project.teacherName,
+      'teamMembers': project.teamMembers,
+      'approvedAt': FieldValue.serverTimestamp(),
+      'academicYear': DateTime.now().year,
+    };
+
+    await _db.collection('approved_projects').add(approvedData);
+  }
+
+  Future<List<Map<String, dynamic>>> getApprovedProjectsByYear(String year) async {
+    final snapshot = await _db
+        .collection('approved_projects')
+        .where('year', isEqualTo: year)
+        .get();
+
+    return snapshot.docs.map((doc) => doc.data()).toList();
   }
 
   Future<void> updateProject(String projectId, String topic, String description) async {

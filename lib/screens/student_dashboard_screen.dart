@@ -37,6 +37,30 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     }
   }
 
+  double _calculateSimilarityScore(String topic, String description, List<Map<String, dynamic>> approvedProjects) {
+    if (approvedProjects.isEmpty) return 0.0;
+
+    final currentText = '${topic.toLowerCase()} ${description.toLowerCase()}';
+    final currentWords = currentText.split(RegExp(r'\s+'));
+
+    double maxSimilarity = 0.0;
+
+    for (var project in approvedProjects) {
+      final projectText = '${project['topic']?.toString().toLowerCase() ?? ''} ${project['description']?.toString().toLowerCase() ?? ''}';
+      final projectWords = projectText.split(RegExp(r'\s+'));
+
+      final commonWords = currentWords.where((word) => projectWords.contains(word) && word.length > 3).length;
+      final totalWords = (currentWords.length + projectWords.length) / 2;
+      final similarity = commonWords / totalWords;
+
+      if (similarity > maxSimilarity) {
+        maxSimilarity = similarity;
+      }
+    }
+
+    return maxSimilarity;
+  }
+
   Future<void> _handleLogout() async {
     final authService = Provider.of<AuthService>(context, listen: false);
     await authService.signOut();
@@ -145,8 +169,13 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                     'Data Science'
                   ];
                   final randomDomain = (domains..shuffle()).first;
-                  final randomScore =
-                      (50 + (DateTime.now().millisecond % 50)).toDouble();
+
+                  final approvedProjects = await dbService.getApprovedProjectsByYear(_student!.year);
+                  final similarityScore = _calculateSimilarityScore(
+                    topicController.text.trim(),
+                    descriptionController.text.trim(),
+                    approvedProjects,
+                  );
 
                   final project = ProjectModel(
                     studentUid: _student!.uid,
@@ -160,7 +189,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                     semester: _student!.semester,
                     teamMembers: _student!.teamMembers,
                     domain: randomDomain,
-                    similarityScore: randomScore / 100,
+                    similarityScore: similarityScore,
                   );
 
                   await dbService.submitProject(project);
@@ -174,6 +203,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                       backgroundColor: Colors.green,
                     ),
                   );
+                  await _loadStudentData();
                 }
               } catch (e) {
                 if (mounted) {
@@ -309,11 +339,41 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 }
 
                 final projects = snapshot.data!;
+                final canSubmitMore = projects.length < 4;
+                final hasApprovedProject = projects.any((p) => p.status == 'approved');
 
-                return ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: projects.length,
-                  itemBuilder: (context, index) {
+                return Column(
+                  children: [
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      color: hasApprovedProject ? Colors.green.shade50 : Colors.blue.shade50,
+                      child: Row(
+                        children: [
+                          Icon(
+                            hasApprovedProject ? Icons.check_circle : Icons.info,
+                            color: hasApprovedProject ? Colors.green.shade700 : Colors.blue.shade700,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              hasApprovedProject
+                                  ? 'One project has been approved by your teacher'
+                                  : 'Submitted ${projects.length} of 4 allowed projects',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: hasApprovedProject ? Colors.green.shade700 : Colors.blue.shade700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: projects.length,
+                        itemBuilder: (context, index) {
                     final project = projects[index];
                     return Card(
                       margin: const EdgeInsets.only(bottom: 16),
@@ -377,17 +437,33 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                         ),
                       ),
                     );
-                  },
+                        },
+                      ),
+                    ),
+                  ],
                 );
               },
             ),
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showSubmitProjectDialog(),
-        icon: const Icon(Icons.add),
-        label: const Text('Submit Project'),
+      floatingActionButton: StreamBuilder<List<ProjectModel>>(
+        stream: Provider.of<DatabaseService>(context, listen: false)
+            .watchProjectsForStudent(_student!.uid),
+        builder: (context, snapshot) {
+          final canSubmit = !snapshot.hasData || snapshot.data!.length < 4;
+          final hasApprovedProject = snapshot.hasData && snapshot.data!.any((p) => p.status == 'approved');
+
+          if (!canSubmit || hasApprovedProject) {
+            return const SizedBox.shrink();
+          }
+
+          return FloatingActionButton.extended(
+            onPressed: () => _showSubmitProjectDialog(),
+            icon: const Icon(Icons.add),
+            label: const Text('Submit Project'),
+          );
+        },
       ),
     );
   }
