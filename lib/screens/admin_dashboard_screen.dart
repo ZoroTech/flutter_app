@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import '../services/auth_service.dart';
 import '../services/database_service.dart';
 import '../models/teacher_model.dart';
@@ -145,10 +146,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 try {
                   final dbService =
                       Provider.of<DatabaseService>(context, listen: false);
-                  final currentUser = FirebaseAuth.instance.currentUser;
+
+                  final secondaryApp = await Firebase.initializeApp(
+                    name: 'Secondary',
+                    options: Firebase.app().options,
+                  );
+
+                  final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
 
                   final userCredential =
-                      await FirebaseAuth.instance.createUserWithEmailAndPassword(
+                      await secondaryAuth.createUserWithEmailAndPassword(
                     email: email,
                     password: password,
                   );
@@ -161,13 +168,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
                   await dbService.addTeacher(teacher);
 
-                  await FirebaseAuth.instance.signOut();
-                  if (currentUser != null) {
-                    await FirebaseAuth.instance.signInWithEmailAndPassword(
-                      email: currentUser.email!,
-                      password: 'admin123',
-                    );
-                  }
+                  await secondaryAuth.signOut();
+                  await secondaryApp.delete();
 
                   if (mounted) {
                     Navigator.pop(context);
