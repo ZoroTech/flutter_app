@@ -339,8 +339,10 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 }
 
                 final projects = snapshot.data!;
-                final canSubmitMore = projects.length < 4;
                 final hasApprovedProject = projects.any((p) => p.status == 'approved');
+                final hasRejectedProject = projects.any((p) => p.status == 'rejected');
+                final totalSubmitted = projects.where((p) => p.status != 'declined').length;
+                final canSubmitMore = totalSubmitted < 4 && !hasApprovedProject && !hasRejectedProject;
 
                 return Column(
                   children: [
@@ -406,17 +408,25 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                               Container(
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  color: Colors.orange.shade50,
+                                  color: project.status == 'rejected'
+                                      ? Colors.red.shade50
+                                      : project.status == 'declined'
+                                          ? Colors.orange.shade50
+                                          : Colors.green.shade50,
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    const Text(
+                                    Text(
                                       'Teacher Feedback:',
                                       style: TextStyle(
                                         fontWeight: FontWeight.bold,
-                                        color: Colors.orange,
+                                        color: project.status == 'rejected'
+                                            ? Colors.red
+                                            : project.status == 'declined'
+                                                ? Colors.orange
+                                                : Colors.green,
                                       ),
                                     ),
                                     const SizedBox(height: 4),
@@ -430,8 +440,36 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                               ElevatedButton.icon(
                                 icon: const Icon(Icons.refresh),
                                 label: const Text('Resubmit Project'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.orange,
+                                  foregroundColor: Colors.white,
+                                ),
                                 onPressed: () =>
                                     _showSubmitProjectDialog(existingProject: project),
+                              ),
+                            if (project.status == 'rejected')
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.red.shade100,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.red.shade300),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.block, color: Colors.red.shade700),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        'This project has been rejected and cannot be resubmitted.',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.red.shade700,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                           ],
                         ),
@@ -455,6 +493,10 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           final hasApprovedProject = snapshot.hasData && snapshot.data!.any((p) => p.status == 'approved');
 
           if (!canSubmit || hasApprovedProject) {
+            return const SizedBox.shrink();
+          }
+
+          if (!canSubmit) {
             return const SizedBox.shrink();
           }
 
@@ -485,6 +527,10 @@ class _StatusChip extends StatelessWidget {
         icon = Icons.check_circle;
         break;
       case 'declined':
+        color = Colors.orange;
+        icon = Icons.refresh;
+        break;
+      case 'rejected':
         color = Colors.red;
         icon = Icons.cancel;
         break;

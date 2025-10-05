@@ -67,11 +67,83 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   }
 
   Future<void> _handleReject() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reject Project'),
+        content: const Text(
+          'Rejecting this project means the student CANNOT resubmit it. This is a FINAL decision. Are you sure?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Reject (Final)'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
     if (_feedbackController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please provide feedback for rejection'),
           backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isProcessing = true);
+
+    try {
+      final dbService = Provider.of<DatabaseService>(context, listen: false);
+      await dbService.updateProjectStatus(
+        widget.project.id!,
+        'rejected',
+        feedback: _feedbackController.text.trim(),
+      );
+
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Project rejected (final - cannot resubmit)'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isProcessing = false);
+      }
+    }
+  }
+
+  Future<void> _handleDecline() async {
+    if (_feedbackController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please provide feedback for declining'),
+          backgroundColor: Colors.orange,
         ),
       );
       return;
@@ -91,7 +163,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Project rejected'),
+            content: Text('Project declined (student can resubmit)'),
             backgroundColor: Colors.orange,
           ),
         );
@@ -339,35 +411,77 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                     ),
                   ),
                   if (project.status == 'pending') ...[
-                    const SizedBox(height: 24),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: _isProcessing ? null : _handleReject,
-                            icon: const Icon(Icons.cancel),
-                            label: const Text('Reject'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.red,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              side: const BorderSide(color: Colors.red),
+                    const SizedBox(height: 16),
+                    Card(
+                      color: Colors.grey[50],
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Teacher Actions',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: _isProcessing ? null : _handleApprove,
-                            icon: const Icon(Icons.check_circle),
-                            label: const Text('Approve'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.green,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: _isProcessing ? null : _handleReject,
+                                    icon: const Icon(Icons.cancel, size: 18),
+                                    label: const Text('Reject'),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: Colors.red,
+                                      padding: const EdgeInsets.symmetric(vertical: 12),
+                                      side: const BorderSide(color: Colors.red),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: _isProcessing ? null : _handleDecline,
+                                    icon: const Icon(Icons.refresh, size: 18),
+                                    label: const Text('Decline'),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: Colors.orange,
+                                      padding: const EdgeInsets.symmetric(vertical: 12),
+                                      side: const BorderSide(color: Colors.orange),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                onPressed: _isProcessing ? null : _handleApprove,
+                                icon: const Icon(Icons.check_circle),
+                                label: const Text('Approve'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.green,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              '• Approve: Final approval, no changes allowed\n• Decline: Send back for resubmission\n• Reject: Final rejection, cannot resubmit',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[600],
+                                height: 1.5,
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   ],
                 ],
@@ -430,6 +544,11 @@ class _StatusChip extends StatelessWidget {
         label = 'APPROVED';
         break;
       case 'declined':
+        color = Colors.orange;
+        icon = Icons.refresh;
+        label = 'DECLINED';
+        break;
+      case 'rejected':
         color = Colors.red;
         icon = Icons.cancel;
         label = 'REJECTED';

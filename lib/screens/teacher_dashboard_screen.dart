@@ -425,11 +425,15 @@ class _StatusChip extends StatelessWidget {
         icon = Icons.check_circle;
         break;
       case 'declined':
+        color = Colors.orange;
+        icon = Icons.refresh;
+        break;
+      case 'rejected':
         color = Colors.red;
         icon = Icons.cancel;
         break;
       default:
-        color = Colors.orange;
+        color = Colors.blue;
         icon = Icons.pending;
     }
 
