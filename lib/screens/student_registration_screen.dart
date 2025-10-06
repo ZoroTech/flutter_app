@@ -3,10 +3,9 @@ import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
 import '../services/database_service.dart';
 import '../services/error_service.dart';
-import '../services/network_service.dart';
 import '../models/student_model.dart';
-import '../models/teacher_model.dart';
 import '../widgets/enhanced_loading_widget.dart';
+import '../widgets/reliable_teacher_dropdown.dart';
 import 'student_dashboard_screen.dart';
 
 class StudentRegistrationScreen extends StatefulWidget {
@@ -367,176 +366,23 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
                   },
                 ),
                 const SizedBox(height: 16),
-                // Enhanced Teacher Dropdown with loading and error handling
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.person_outline),
-                            const SizedBox(width: 8),
-                            const Text(
-                              'Select Teacher',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            if (_isLoadingTeachers) ...[
-                              const SizedBox(width: 12),
-                              const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              ),
-                            ],
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        
-                        if (_isLoadingTeachers)
-                          const EnhancedLoadingWidget.skeleton(
-                            size: 48,
-                          )
-                        else if (_teacherLoadError)
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.red.shade50,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.red.shade200),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Icon(Icons.error_outline, color: Colors.red.shade600),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        'Failed to load teachers',
-                                        style: TextStyle(
-                                          color: Colors.red.shade700,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                if (_teacherErrorMessage != null) ...[
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    _teacherErrorMessage!,
-                                    style: TextStyle(
-                                      color: Colors.red.shade600,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ],
-                                const SizedBox(height: 8),
-                                ElevatedButton.icon(
-                                  onPressed: _loadTeachers,
-                                  icon: const Icon(Icons.refresh, size: 16),
-                                  label: const Text('Retry'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.red,
-                                    foregroundColor: Colors.white,
-                                    minimumSize: const Size(80, 32),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          )
-                        else if (_teachers.isEmpty)
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.orange.shade50,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.orange.shade200),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(Icons.info_outline, color: Colors.orange.shade600),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    'No teachers available. Please contact admin.',
-                                    style: TextStyle(
-                                      color: Colors.orange.shade700,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          )
-                        else
-                          DropdownButtonFormField<String>(
-                            initialValue: _selectedTeacherUid,
-                            decoration: InputDecoration(
-                              hintText: 'Choose your guide teacher',
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              filled: true,
-                              fillColor: Colors.grey[50],
-                            ),
-                            items: _teachers
-                                .map((teacher) => DropdownMenuItem(
-                                      value: teacher.uid,
-                                      child: Row(
-                                        children: [
-                                          CircleAvatar(
-                                            backgroundColor: Theme.of(context).colorScheme.primary,
-                                            radius: 16,
-                                            child: Text(
-                                              teacher.name[0].toUpperCase(),
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 12,
-                                              ),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  teacher.name,
-                                                  style: const TextStyle(
-                                                    fontWeight: FontWeight.w500,
-                                                  ),
-                                                ),
-                                                Text(
-                                                  teacher.email,
-                                                  style: TextStyle(
-                                                    fontSize: 12,
-                                                    color: Colors.grey[600],
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ))
-                                .toList(),
-                            onChanged: (_isLoadingTeachers || _teachers.isEmpty) ? null : (value) {
-                              if (value != null) {
-                                setState(() {
-                                  _selectedTeacherUid = value;
-                                  _selectedTeacherName = _teachers
-                                      .firstWhere((t) => t.uid == value)
-                                      .name;
-                                });
-                              }
-                            },
+                // Reliable Teacher Dropdown with offline-first approach for student registration
+                ReliableTeacherDropdown(
+                  selectedTeacherUid: _selectedTeacherUid,
+                  onTeacherChanged: (uid, name) {
+                    setState(() {
+                      _selectedTeacherUid = uid;
+                      _selectedTeacherName = name;
+                    });
+                  },
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please select a teacher';
+                    }
+                    return null;
+                  },
+                  forceOfflineMode: true, // Always use offline mode for student registration
+                ),
                             validator: (value) {
                               if (value == null) {
                                 return 'Please select a teacher';
@@ -550,55 +396,15 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
                 ),
                 const SizedBox(height: 24),
                 ElevatedButton(
-                  onPressed: (_isLoading || _isLoadingTeachers || _teachers.isEmpty) 
-                      ? null 
-                      : _handleRegister,
+                  onPressed: _isLoading ? null : _handleRegister,
                   child: _isLoading
                       ? const SizedBox(
                           height: 20,
                           width: 20,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : Text(_isLoadingTeachers 
-                          ? 'Loading Teachers...' 
-                          : _teachers.isEmpty 
-                              ? 'No Teachers Available'
-                              : 'Register'),
+                      : const Text('Register'),
                 ),
-                
-                // Additional info about registration state
-                if (_isLoadingTeachers || _teachers.isEmpty) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.blue.shade200),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          _isLoadingTeachers ? Icons.hourglass_empty : Icons.info_outline,
-                          color: Colors.blue.shade600,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            _isLoadingTeachers 
-                                ? 'Please wait while we load teacher information...'
-                                : 'Teacher selection is required for registration. Please contact admin if no teachers are available.',
-                            style: TextStyle(
-                              color: Colors.blue.shade700,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
               ],
             ),
           ),

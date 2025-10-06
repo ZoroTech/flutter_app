@@ -293,73 +293,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             )
           else
             Expanded(
-              child: Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Card(
-                      color: Colors.blue.shade50,
-                      child: InkWell(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const PastProjectsScreen(),
-                            ),
-                          );
-                        },
-                        child: Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: Colors.blue.shade100,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Icon(
-                                  Icons.folder_open,
-                                  color: Colors.blue.shade700,
-                                  size: 32,
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Past Projects Archive',
-                                      style: TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.blue.shade900,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      'View all approved projects from previous batches',
-                                      style: TextStyle(
-                                        color: Colors.blue.shade700,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Icon(
-                                Icons.arrow_forward_ios,
-                                color: Colors.blue.shade700,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: ListView.builder(
+              child: ListView.builder(
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                       itemCount: _teachers.length,
                       itemBuilder: (context, index) {
@@ -398,9 +332,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         );
                       },
                     ),
-                  ),
-                ],
-              ),
             ),
         ],
       ),
