@@ -61,11 +61,7 @@ class SimilarityService {
     if (existingProjects.isEmpty) {
       return SimilarityCheckResult(
         topSimilarProjects: [],
-        suggestedDomain: DomainSuggestion(
-          domain: 'Web Development', // Default domain
-          confidence: 0.0,
-          supportingProjects: [],
-        ),
+        suggestedDomain: _getSmartDefaultDomain(title, description), // Use smart domain detection
         hasHighSimilarity: false,
         maxSimilarity: 0.0,
       );
@@ -101,8 +97,8 @@ class SimilarityService {
     similarities.sort((a, b) => b.similarity.compareTo(a.similarity));
     final topSimilarities = similarities.take(maxSimilarProjects).toList();
     
-    // Calculate domain suggestion
-    final domainSuggestion = _calculateDomainSuggestion(similarities);
+    // Calculate domain suggestion with fallback to smart analysis
+    final domainSuggestion = _calculateDomainSuggestion(similarities, title, description);
     
     final maxSimilarity = similarities.isNotEmpty ? similarities.first.similarity : 0.0;
     final hasHighSimilarity = maxSimilarity > highSimilarityThreshold;
@@ -186,13 +182,10 @@ class SimilarityService {
   }
 
   /// Calculate domain suggestion based on similarity scores
-  static DomainSuggestion _calculateDomainSuggestion(List<SimilarityResult> similarities) {
+  static DomainSuggestion _calculateDomainSuggestion(List<SimilarityResult> similarities, String title, String description) {
     if (similarities.isEmpty) {
-      return DomainSuggestion(
-        domain: 'Web Development',
-        confidence: 0.0,
-        supportingProjects: [],
-      );
+      // Provide intelligent fallback based on common project types
+      return _getSmartDefaultDomain(title, description);
     }
 
     // Group similarities by domain and calculate weighted scores
@@ -201,11 +194,13 @@ class SimilarityService {
 
     for (final result in similarities) {
       final domain = result.domain;
-      domainScores[domain] = (domainScores[domain] ?? 0.0) + result.similarity;
+      // Give more weight to higher similarity scores
+      final weightedScore = result.similarity * result.similarity; // Square for emphasis
+      domainScores[domain] = (domainScores[domain] ?? 0.0) + weightedScore;
       domainProjects[domain] = (domainProjects[domain] ?? [])..add(result);
     }
 
-    // Find the domain with highest score
+    // Find the domain with highest weighted score
     String bestDomain = 'Web Development';
     double bestScore = 0.0;
     
@@ -215,6 +210,11 @@ class SimilarityService {
         bestDomain = domain;
       }
     });
+
+    // If no significant similarity found, use intelligent fallback
+    if (bestScore < 0.1 || domainProjects[bestDomain]!.isEmpty) {
+      return _getSmartDefaultDomain(title, description);
+    }
 
     // Calculate confidence based on the top similarity score and number of supporting projects
     final supportingProjects = domainProjects[bestDomain] ?? [];
@@ -226,6 +226,53 @@ class SimilarityService {
       domain: bestDomain,
       confidence: confidence,
       supportingProjects: supportingProjects.take(3).toList(),
+    );
+  }
+
+  /// Provide smart domain suggestion based on project content analysis
+  static DomainSuggestion _getSmartDefaultDomain(String title, String description) {
+    final combinedText = '$title $description'.toLowerCase();
+    
+    // Define domain keywords
+    final domainKeywords = {
+      'AI/ML': ['ai', 'artificial intelligence', 'machine learning', 'neural', 'deep learning', 'classification', 'prediction', 'model', 'algorithm', 'tensorflow', 'python', 'data mining', 'nlp', 'computer vision'],
+      'Mobile Development': ['android', 'ios', 'mobile', 'app', 'flutter', 'react native', 'kotlin', 'swift', 'firebase', 'smartphone'],
+      'Web Development': ['web', 'website', 'html', 'css', 'javascript', 'react', 'vue', 'angular', 'node', 'backend', 'frontend', 'api', 'rest', 'http'],
+      'IoT': ['iot', 'internet of things', 'sensor', 'arduino', 'raspberry pi', 'embedded', 'automation', 'smart home', 'wireless', 'bluetooth'],
+      'Data Science': ['data science', 'analytics', 'visualization', 'statistics', 'big data', 'dashboard', 'reporting', 'insights', 'pandas', 'matplotlib'],
+      'Blockchain': ['blockchain', 'cryptocurrency', 'bitcoin', 'ethereum', 'smart contract', 'decentralized', 'crypto', 'ledger'],
+      'Cybersecurity': ['security', 'cybersecurity', 'encryption', 'firewall', 'penetration', 'vulnerability', 'cyber', 'hacking'],
+      'Game Development': ['game', 'gaming', 'unity', 'unreal', '2d', '3d', 'graphics', 'animation'],
+    };
+    
+    // Score each domain based on keyword matches
+    final domainScores = <String, int>{};
+    
+    domainKeywords.forEach((domain, keywords) {
+      int score = 0;
+      for (final keyword in keywords) {
+        if (combinedText.contains(keyword)) {
+          score += keyword.length > 5 ? 3 : 1; // Give more points for specific keywords
+        }
+      }
+      domainScores[domain] = score;
+    });
+    
+    // Find the highest scoring domain
+    String bestDomain = 'Web Development'; // Default fallback
+    int bestScore = 0;
+    
+    domainScores.forEach((domain, score) {
+      if (score > bestScore) {
+        bestScore = score;
+        bestDomain = domain;
+      }
+    });
+    
+    return DomainSuggestion(
+      domain: bestDomain,
+      confidence: bestScore > 0 ? 0.5 : 0.0, // Medium confidence for keyword-based suggestions
+      supportingProjects: [],
     );
   }
 

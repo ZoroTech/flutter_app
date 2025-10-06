@@ -151,6 +151,7 @@ class SimilarityCheckDialog extends StatelessWidget {
                         backgroundColor: result.hasHighSimilarity 
                             ? Colors.orange
                             : Theme.of(context).colorScheme.primary,
+                        foregroundColor: Colors.white,
                       ),
                     ),
                   ),
