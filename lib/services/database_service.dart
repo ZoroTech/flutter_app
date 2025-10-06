@@ -171,6 +171,22 @@ class DatabaseService {
         .toList();
   }
 
+  Future<List<ProjectModel>> getAllProjects() async {
+    return await NetworkService.instance.executeWithConnectivityCheck(
+      () async {
+        final snapshot = await _db
+            .collection('projects')
+            .orderBy('submittedAt', descending: true)
+            .get();
+
+        return snapshot.docs
+            .map((doc) => ProjectModel.fromMap(doc.data()))
+            .toList();
+      },
+      offlineMessage: 'Cannot load all projects while offline.',
+    ) ?? [];
+  }
+
   Future<void> updateProjectStatus(
     String projectId,
     String status, {
