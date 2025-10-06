@@ -63,8 +63,7 @@ class _LoginScreenState extends State<LoginScreen> {
         throw 'Students must use @pvppcoe.ac.in email';
       }
 
-      final userCredential =
-          await authService.signInWithEmailPassword(email, password);
+      await authService.signInWithEmailPassword(email, password);
 
       final userRole = await dbService.getUserRole(email);
 

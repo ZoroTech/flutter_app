@@ -156,7 +156,7 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
       if (mounted) {
         ErrorService.showErrorSnackBar(context, e);
       }
-    }
+    } finally {
       if (mounted) {
         setState(() => _isLoading = false);
       }

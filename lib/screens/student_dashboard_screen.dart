@@ -9,7 +9,6 @@ import '../models/project_model.dart';
 import '../widgets/search_filter_widget.dart';
 import '../widgets/enhanced_loading_widget.dart';
 import 'role_selection_screen.dart';
-import 'project_detail_screen.dart';
 class StudentDashboardScreen extends StatefulWidget {
   const StudentDashboardScreen({super.key});
 
@@ -430,7 +429,6 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 final hasApprovedProject = projects.any((p) => p.status == 'approved');
                 final hasRejectedProject = projects.any((p) => p.status == 'rejected');
                 final totalSubmitted = projects.where((p) => p.status != 'declined').length;
-                final canSubmitMore = totalSubmitted < 4 && !hasApprovedProject && !hasRejectedProject;
 
                 return Column(
                   children: [

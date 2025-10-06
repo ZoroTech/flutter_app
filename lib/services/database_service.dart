@@ -1,10 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import '../models/teacher_model.dart';
 import '../models/student_model.dart';
 import '../models/project_model.dart';
 import 'network_service.dart';
-import 'error_service.dart';
 
 class DatabaseService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -17,7 +15,7 @@ class DatabaseService {
   }
 
   Future<StudentModel?> getStudent(String uid) async {
-    return await NetworkService.instance.executeWithConnectivityCheck(
+    return await NetworkService.instance.executeWithConnectivityCheck<StudentModel?>(
       () async {
         final doc = await _db.collection('students').doc(uid).get();
         if (doc.exists) {
@@ -26,7 +24,7 @@ class DatabaseService {
         return null;
       },
       offlineMessage: 'Cannot load student data while offline.',
-    );
+    ) ?? null;
   }
 
   Future<void> addTeacher(TeacherModel teacher) async {
