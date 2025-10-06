@@ -151,7 +151,7 @@ class _SearchFilterWidgetState extends State<SearchFilterWidget> {
                     children: [
                       Expanded(
                         child: DropdownButtonFormField<ProjectSortBy>(
-                          value: _currentSortBy,
+                          initialValue: _currentSortBy,
                           decoration: const InputDecoration(
                             labelText: 'Sort by',
                             prefixIcon: Icon(Icons.sort),
@@ -176,7 +176,7 @@ class _SearchFilterWidgetState extends State<SearchFilterWidget> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: DropdownButtonFormField<ProjectFilterBy>(
-                            value: _currentFilterBy,
+                            initialValue: _currentFilterBy,
                             decoration: const InputDecoration(
                               labelText: 'Filter by',
                               prefixIcon: Icon(Icons.filter_alt),
@@ -229,7 +229,7 @@ class _SearchFilterWidgetState extends State<SearchFilterWidget> {
       selected: isSelected,
       onSelected: (_) => _onFilterChanged(filterBy),
       backgroundColor: Colors.grey[100],
-      selectedColor: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+      selectedColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
       checkmarkColor: Theme.of(context).colorScheme.primary,
       labelStyle: TextStyle(
         color: isSelected 

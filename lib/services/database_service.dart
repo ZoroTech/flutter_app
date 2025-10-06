@@ -24,7 +24,7 @@ class DatabaseService {
         return null;
       },
       offlineMessage: 'Cannot load student data while offline.',
-    ) ?? null;
+    );
   }
 
   Future<void> addTeacher(TeacherModel teacher) async {

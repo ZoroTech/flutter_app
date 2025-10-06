@@ -172,24 +172,22 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   await secondaryAuth.signOut();
                   await secondaryApp.delete();
 
-                  if (mounted) {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Teacher added successfully'),
-                        backgroundColor: Colors.green,
-                      ),
-                    );
-                    await _loadTeachers();
-                  }
+                  if (!context.mounted) return;
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Teacher added successfully'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                  await _loadTeachers();
                 } catch (e) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Error: $e'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error: $e'),
+                      backgroundColor: Colors.red,
+                    ),
                   }
                 }
               },

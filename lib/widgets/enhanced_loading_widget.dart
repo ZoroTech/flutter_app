@@ -128,7 +128,7 @@ class _EnhancedLoadingWidgetState extends State<EnhancedLoadingWidget>
           width: 200,
           child: LinearProgressIndicator(
             color: color,
-            backgroundColor: color.withOpacity(0.2),
+            backgroundColor: color.withValues(alpha: 0.2),
           ),
         );
 
@@ -218,7 +218,7 @@ class LoadingOverlay extends StatelessWidget {
         child,
         if (isLoading)
           Container(
-            color: Colors.black.withOpacity(0.5),
+            color: Colors.black.withValues(alpha: 0.5),
             child: EnhancedLoadingWidget(
               type: loadingType,
               message: loadingMessage,

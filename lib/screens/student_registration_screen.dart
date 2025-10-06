@@ -567,7 +567,7 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
                 ),
                 
                 // Additional info about registration state
-                if (_isLoadingTeachers || _teachers.isEmpty) ..[
+                if (_isLoadingTeachers || _teachers.isEmpty) ...[
                   const SizedBox(height: 12),
                   Container(
                     padding: const EdgeInsets.all(12),

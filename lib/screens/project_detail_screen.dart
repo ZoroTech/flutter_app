@@ -93,6 +93,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
 
     if (confirmed != true) return;
 
+    if (!mounted) return;
     if (_feedbackController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -139,6 +140,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   }
 
   Future<void> _handleDecline() async {
+    if (!mounted) return;
     if (_feedbackController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -326,7 +328,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                         vertical: 8,
                       ),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
