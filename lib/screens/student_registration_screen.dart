@@ -3,7 +3,9 @@ import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
 import '../services/database_service.dart';
 import '../services/error_service.dart';
+import '../services/network_service.dart';
 import '../models/student_model.dart';
+import '../models/teacher_model.dart';
 import '../widgets/enhanced_loading_widget.dart';
 import '../widgets/reliable_teacher_dropdown.dart';
 import 'student_dashboard_screen.dart';
@@ -174,6 +176,7 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         title: const Text('Student Registration'),
         actions: [
@@ -191,13 +194,21 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
         ],
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 50),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: constraints.maxHeight - 100, // Account for padding
+                ),
+                child: IntrinsicHeight(
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
                 TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
@@ -383,17 +394,6 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
                   },
                   forceOfflineMode: true, // Always use offline mode for student registration
                 ),
-                            validator: (value) {
-                              if (value == null) {
-                                return 'Please select a teacher';
-                              }
-                              return null;
-                            },
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
                 const SizedBox(height: 24),
                 ElevatedButton(
                   onPressed: _isLoading ? null : _handleRegister,
@@ -405,9 +405,13 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
                         )
                       : const Text('Register'),
                 ),
-              ],
-            ),
-          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
         ),
       ),
     );
