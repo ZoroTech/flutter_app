@@ -199,4 +199,139 @@ class DatabaseService {
         .map((snapshot) =>
             snapshot.docs.map((doc) => ProjectModel.fromMap(doc.data())).toList());
   }
+
+  Future<List<Map<String, dynamic>>> getAllPastProjects({
+    String? year,
+    String? semester,
+    String? domain,
+    String? academicYear,
+  }) async {
+    Query query = _db.collection('approved_projects');
+
+    if (year != null) {
+      query = query.where('year', isEqualTo: year);
+    }
+
+    if (semester != null) {
+      query = query.where('semester', isEqualTo: semester);
+    }
+
+    if (domain != null) {
+      query = query.where('domain', isEqualTo: domain);
+    }
+
+    if (academicYear != null) {
+      query = query.where('academicYear', isEqualTo: int.parse(academicYear));
+    }
+
+    final snapshot = await query.orderBy('approvedAt', descending: true).get();
+
+    return snapshot.docs.map((doc) {
+      final data = doc.data() as Map<String, dynamic>;
+      data['id'] = doc.id;
+      return data;
+    }).toList();
+  }
+
+  Future<Map<String, int>> getPastProjectsStatistics() async {
+    final snapshot = await _db.collection('approved_projects').get();
+
+    final stats = <String, int>{
+      'total': snapshot.docs.length,
+    };
+
+    final domainCounts = <String, int>{};
+    final yearCounts = <String, int>{};
+
+    for (var doc in snapshot.docs) {
+      final data = doc.data();
+
+      final domain = data['domain'] as String?;
+      if (domain != null) {
+        domainCounts[domain] = (domainCounts[domain] ?? 0) + 1;
+      }
+
+      final year = data['year'] as String?;
+      if (year != null) {
+        yearCounts[year] = (yearCounts[year] ?? 0) + 1;
+      }
+    }
+
+    stats.addAll(domainCounts);
+    stats.addAll(yearCounts);
+
+    return stats;
+  }
+
+  Future<List<String>> getAvailableDomains() async {
+    final snapshot = await _db.collection('approved_projects').get();
+    final domains = <String>{};
+
+    for (var doc in snapshot.docs) {
+      final domain = doc.data()['domain'] as String?;
+      if (domain != null) {
+        domains.add(domain);
+      }
+    }
+
+    return domains.toList()..sort();
+  }
+
+  Future<List<String>> getAvailableAcademicYears() async {
+    final snapshot = await _db.collection('approved_projects').get();
+    final years = <String>{};
+
+    for (var doc in snapshot.docs) {
+      final year = doc.data()['academicYear'];
+      if (year != null) {
+        years.add(year.toString());
+      }
+    }
+
+    return years.toList()..sort((a, b) => b.compareTo(a));
+  }
+
+  Stream<List<Map<String, dynamic>>> watchAllPastProjects() {
+    return _db
+        .collection('approved_projects')
+        .orderBy('approvedAt', descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.map((doc) {
+              final data = doc.data();
+              data['id'] = doc.id;
+              return data;
+            }).toList());
+  }
+
+  Future<void> initializeTeachers() async {
+    try {
+      final teachersSnapshot = await _db.collection('teachers').get();
+
+      if (teachersSnapshot.docs.isEmpty) {
+        final teachers = [
+          {
+            'email': 'teacher1@pvppcoe.ac.in',
+            'name': 'Dr. Rajesh Kumar',
+            'uid': 'teacher1_uid',
+          },
+          {
+            'email': 'teacher2@pvppcoe.ac.in',
+            'name': 'Prof. Priya Sharma',
+            'uid': 'teacher2_uid',
+          },
+          {
+            'email': 'teacher3@pvppcoe.ac.in',
+            'name': 'Dr. Amit Patel',
+            'uid': 'teacher3_uid',
+          },
+        ];
+
+        for (var teacher in teachers) {
+          await _db.collection('teachers').doc(teacher['uid'] as String).set(teacher);
+        }
+      }
+    } catch (e) {
+      print('Error initializing teachers: $e');
+    }
+  }
 }
