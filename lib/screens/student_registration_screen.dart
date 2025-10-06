@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
 import '../services/database_service.dart';
+import '../services/error_service.dart';
+import '../services/network_service.dart';
 import '../models/student_model.dart';
 import '../models/teacher_model.dart';
+import '../widgets/enhanced_loading_widget.dart';
 import 'student_dashboard_screen.dart';
 
 class StudentRegistrationScreen extends StatefulWidget {
@@ -27,6 +30,9 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
   String? _selectedTeacherName;
   List<TeacherModel> _teachers = [];
   bool _isLoading = false;
+  bool _isLoadingTeachers = true;
+  bool _teacherLoadError = false;
+  String? _teacherErrorMessage;
   bool _obscurePassword = true;
 
   final List<String> _years = ['FE', 'SE', 'TE', 'BE'];
@@ -35,15 +41,57 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
   @override
   void initState() {
     super.initState();
-    _loadTeachers();
+    // Load teachers after the widget is fully initialized
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadTeachers();
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Reload teachers if they failed to load initially
+    if (_teacherLoadError && _teachers.isEmpty) {
+      _loadTeachers();
+    }
   }
 
   Future<void> _loadTeachers() async {
-    final dbService = Provider.of<DatabaseService>(context, listen: false);
-    final teachers = await dbService.getAllTeachers();
-    setState(() {
-      _teachers = teachers;
-    });
+    print('🔄 Loading teachers - Start');
+    try {
+      setState(() {
+        _isLoadingTeachers = true;
+        _teacherLoadError = false;
+        _teacherErrorMessage = null;
+      });
+
+      final dbService = Provider.of<DatabaseService>(context, listen: false);
+      
+      // Use network service to ensure connectivity
+      final teachers = await NetworkService.instance.executeWithConnectivityCheck(
+        () => dbService.getAllTeachers(),
+        offlineMessage: 'Cannot load teachers while offline. Please check your connection.',
+      );
+      
+      if (mounted) {
+        print('✅ Teachers loaded successfully: ${teachers?.length ?? 0} teachers');
+        setState(() {
+          _teachers = teachers ?? [];
+          _isLoadingTeachers = false;
+          _teacherLoadError = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingTeachers = false;
+          _teacherLoadError = true;
+          _teacherErrorMessage = ErrorService.getErrorMessage(e);
+        });
+        print('❌ Error loading teachers: $e');
+        ErrorService.showErrorSnackBar(context, e);
+      }
+    }
   }
 
   void _addTeamMember() {
@@ -106,14 +154,9 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString()),
-            backgroundColor: Colors.red,
-          ),
-        );
+        ErrorService.showErrorSnackBar(context, e);
       }
-    } finally {
+    }
       if (mounted) {
         setState(() => _isLoading = false);
       }
@@ -134,6 +177,19 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Student Registration'),
+        actions: [
+          if (_teacherLoadError || _teachers.isEmpty)
+            IconButton(
+              icon: Icon(
+                Icons.refresh,
+                color: _isLoadingTeachers 
+                    ? Colors.grey 
+                    : Theme.of(context).colorScheme.primary,
+              ),
+              onPressed: _isLoadingTeachers ? null : _loadTeachers,
+              tooltip: 'Reload Teachers',
+            ),
+        ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -311,44 +367,238 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
                   },
                 ),
                 const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
-                  value: _selectedTeacherUid,
-                  decoration: const InputDecoration(
-                    labelText: 'Select Teacher',
-                    prefixIcon: Icon(Icons.person_outline),
+                // Enhanced Teacher Dropdown with loading and error handling
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.person_outline),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'Select Teacher',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            if (_isLoadingTeachers) ...[
+                              const SizedBox(width: 12),
+                              const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        
+                        if (_isLoadingTeachers)
+                          const EnhancedLoadingWidget.skeleton(
+                            size: 48,
+                          )
+                        else if (_teacherLoadError)
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.red.shade200),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(Icons.error_outline, color: Colors.red.shade600),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        'Failed to load teachers',
+                                        style: TextStyle(
+                                          color: Colors.red.shade700,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                if (_teacherErrorMessage != null) ...[
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    _teacherErrorMessage!,
+                                    style: TextStyle(
+                                      color: Colors.red.shade600,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                                const SizedBox(height: 8),
+                                ElevatedButton.icon(
+                                  onPressed: _loadTeachers,
+                                  icon: const Icon(Icons.refresh, size: 16),
+                                  label: const Text('Retry'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.red,
+                                    foregroundColor: Colors.white,
+                                    minimumSize: const Size(80, 32),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        else if (_teachers.isEmpty)
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.orange.shade200),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.info_outline, color: Colors.orange.shade600),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'No teachers available. Please contact admin.',
+                                    style: TextStyle(
+                                      color: Colors.orange.shade700,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        else
+                          DropdownButtonFormField<String>(
+                            value: _selectedTeacherUid,
+                            decoration: InputDecoration(
+                              hintText: 'Choose your guide teacher',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              filled: true,
+                              fillColor: Colors.grey[50],
+                            ),
+                            items: _teachers
+                                .map((teacher) => DropdownMenuItem(
+                                      value: teacher.uid,
+                                      child: Row(
+                                        children: [
+                                          CircleAvatar(
+                                            backgroundColor: Theme.of(context).colorScheme.primary,
+                                            radius: 16,
+                                            child: Text(
+                                              teacher.name[0].toUpperCase(),
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  teacher.name,
+                                                  style: const TextStyle(
+                                                    fontWeight: FontWeight.w500,
+                                                  ),
+                                                ),
+                                                Text(
+                                                  teacher.email,
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    color: Colors.grey[600],
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ))
+                                .toList(),
+                            onChanged: _isLoadingTeachers ? null : (value) {
+                              if (value != null) {
+                                setState(() {
+                                  _selectedTeacherUid = value;
+                                  _selectedTeacherName = _teachers
+                                      .firstWhere((t) => t.uid == value)
+                                      .name;
+                                });
+                              }
+                            },
+                            validator: (value) {
+                              if (value == null) {
+                                return 'Please select a teacher';
+                              }
+                              return null;
+                            },
+                          ),
+                      ],
+                    ),
                   ),
-                  items: _teachers
-                      .map((teacher) => DropdownMenuItem(
-                            value: teacher.uid,
-                            child: Text(teacher.name),
-                          ))
-                      .toList(),
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedTeacherUid = value;
-                      _selectedTeacherName = _teachers
-                          .firstWhere((t) => t.uid == value)
-                          .name;
-                    });
-                  },
-                  validator: (value) {
-                    if (value == null) {
-                      return 'Please select a teacher';
-                    }
-                    return null;
-                  },
                 ),
                 const SizedBox(height: 24),
                 ElevatedButton(
-                  onPressed: _isLoading ? null : _handleRegister,
+                  onPressed: (_isLoading || _isLoadingTeachers || _teachers.isEmpty) 
+                      ? null 
+                      : _handleRegister,
                   child: _isLoading
                       ? const SizedBox(
                           height: 20,
                           width: 20,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Text('Register'),
+                      : Text(_isLoadingTeachers 
+                          ? 'Loading Teachers...' 
+                          : _teachers.isEmpty 
+                              ? 'No Teachers Available'
+                              : 'Register'),
                 ),
+                
+                // Additional info about registration state
+                if (_isLoadingTeachers || _teachers.isEmpty) ..[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.blue.shade200),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          _isLoadingTeachers ? Icons.hourglass_empty : Icons.info_outline,
+                          color: Colors.blue.shade600,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _isLoadingTeachers 
+                                ? 'Please wait while we load teacher information...'
+                                : 'Teacher selection is required for registration. Please contact admin if no teachers are available.',
+                            style: TextStyle(
+                              color: Colors.blue.shade700,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

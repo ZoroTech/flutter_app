@@ -5,12 +5,17 @@ import 'firebase_options.dart';
 import 'screens/role_selection_screen.dart';
 import 'services/auth_service.dart';
 import 'services/database_service.dart';
+import 'services/network_service.dart';
+import 'services/error_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  // Initialize network monitoring
+  NetworkService.instance.startMonitoring();
 
   runApp(const MyApp());
 }

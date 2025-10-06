@@ -3,20 +3,30 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../models/teacher_model.dart';
 import '../models/student_model.dart';
 import '../models/project_model.dart';
+import 'network_service.dart';
+import 'error_service.dart';
 
 class DatabaseService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   Future<void> saveStudent(StudentModel student) async {
-    await _db.collection('students').doc(student.uid).set(student.toMap());
+    return await NetworkService.instance.executeWithConnectivityCheck(
+      () => _db.collection('students').doc(student.uid).set(student.toMap()),
+      offlineMessage: 'Cannot save student data while offline.',
+    );
   }
 
   Future<StudentModel?> getStudent(String uid) async {
-    final doc = await _db.collection('students').doc(uid).get();
-    if (doc.exists) {
-      return StudentModel.fromMap(doc.data()!);
-    }
-    return null;
+    return await NetworkService.instance.executeWithConnectivityCheck(
+      () async {
+        final doc = await _db.collection('students').doc(uid).get();
+        if (doc.exists) {
+          return StudentModel.fromMap(doc.data()!);
+        }
+        return null;
+      },
+      offlineMessage: 'Cannot load student data while offline.',
+    );
   }
 
   Future<void> addTeacher(TeacherModel teacher) async {
@@ -24,10 +34,15 @@ class DatabaseService {
   }
 
   Future<List<TeacherModel>> getAllTeachers() async {
-    final snapshot = await _db.collection('teachers').get();
-    return snapshot.docs
-        .map((doc) => TeacherModel.fromMap(doc.data()))
-        .toList();
+    return await NetworkService.instance.executeWithConnectivityCheck(
+      () async {
+        final snapshot = await _db.collection('teachers').get();
+        return snapshot.docs
+            .map((doc) => TeacherModel.fromMap(doc.data()))
+            .toList();
+      },
+      offlineMessage: 'Cannot load teachers while offline. Please check your connection.',
+    ) ?? [];
   }
 
   Future<TeacherModel?> getTeacher(String uid) async {
@@ -67,13 +82,18 @@ class DatabaseService {
   }
 
   Future<void> submitProject(ProjectModel project) async {
-    final existingProjects = await getProjectsForStudent(project.studentUid);
-    if (existingProjects.length >= 4) {
-      throw Exception('Maximum 4 project submissions allowed');
-    }
+    return await NetworkService.instance.executeWithConnectivityCheck(
+      () async {
+        final existingProjects = await getProjectsForStudent(project.studentUid);
+        if (existingProjects.length >= 4) {
+          throw Exception('Maximum 4 project submissions allowed');
+        }
 
-    final docRef = await _db.collection('projects').add(project.toMap());
-    await docRef.update({'id': docRef.id});
+        final docRef = await _db.collection('projects').add(project.toMap());
+        await docRef.update({'id': docRef.id});
+      },
+      offlineMessage: 'Cannot submit project while offline. Please check your connection.',
+    );
   }
 
   Future<List<ProjectModel>> getProjectsForTeacher(String teacherUid) async {

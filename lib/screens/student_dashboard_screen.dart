@@ -2,10 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
 import '../services/database_service.dart';
+import '../services/error_service.dart';
+import '../services/network_service.dart';
 import '../models/student_model.dart';
 import '../models/project_model.dart';
+import '../widgets/search_filter_widget.dart';
+import '../widgets/enhanced_loading_widget.dart';
 import 'role_selection_screen.dart';
-
+import 'project_detail_screen.dart';
 class StudentDashboardScreen extends StatefulWidget {
   const StudentDashboardScreen({super.key});
 
@@ -16,25 +20,91 @@ class StudentDashboardScreen extends StatefulWidget {
 class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   StudentModel? _student;
   bool _isLoading = true;
+  List<ProjectModel> _allProjects = [];
+  List<ProjectModel> _filteredProjects = [];
+  String _searchQuery = '';
+  ProjectSortBy _sortBy = ProjectSortBy.newest;
+  ProjectFilterBy _filterBy = ProjectFilterBy.all;
+  bool _isOffline = false;
 
   @override
   void initState() {
     super.initState();
     _loadStudentData();
+    _listenToNetworkChanges();
+  }
+
+  void _listenToNetworkChanges() {
+    NetworkService.instance.connectivityStream.listen((isConnected) {
+      if (mounted) {
+        setState(() {
+          _isOffline = !isConnected;
+        });
+        
+        if (!isConnected) {
+          ErrorService.showInfoSnackBar(
+            context, 
+            'You are offline. Some features may not work.',
+          );
+        } else if (_isOffline) {
+          ErrorService.showSuccessSnackBar(
+            context,
+            'Connection restored!',
+          );
+        }
+      }
+    });
   }
 
   Future<void> _loadStudentData() async {
-    final authService = Provider.of<AuthService>(context, listen: false);
-    final dbService = Provider.of<DatabaseService>(context, listen: false);
+    try {
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final dbService = Provider.of<DatabaseService>(context, listen: false);
 
-    final user = authService.currentUser;
-    if (user != null) {
-      final student = await dbService.getStudent(user.uid);
-      setState(() {
-        _student = student;
-        _isLoading = false;
-      });
+      final user = authService.currentUser;
+      if (user != null) {
+        final student = await dbService.getStudent(user.uid);
+        setState(() {
+          _student = student;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ErrorService.showErrorSnackBar(context, e);
+        setState(() => _isLoading = false);
+      }
     }
+  }
+
+  void _onSearchFilterChanged(String query, ProjectSortBy sortBy, ProjectFilterBy filterBy) {
+    setState(() {
+      _searchQuery = query;
+      _sortBy = sortBy;
+      _filterBy = filterBy;
+      _filteredProjects = ProjectSearchHelper.searchAndFilterProjects(
+        _allProjects,
+        query,
+        sortBy,
+        filterBy,
+      );
+    });
+  }
+
+  void _updateProjectsList(List<ProjectModel> projects) {
+    setState(() {
+      _allProjects = projects;
+      _filteredProjects = ProjectSearchHelper.searchAndFilterProjects(
+        _allProjects,
+        _searchQuery,
+        _sortBy,
+        _filterBy,
+      );
+    });
+  }
+
+  Future<void> _refreshData() async {
+    await _loadStudentData();
   }
 
   double _calculateSimilarityScore(String topic, String description, List<Map<String, dynamic>> approvedProjects) {
@@ -197,22 +267,15 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
 
                 if (mounted) {
                   Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Project submitted successfully'),
-                      backgroundColor: Colors.green,
-                    ),
+                  ErrorService.showSuccessSnackBar(
+                    context,
+                    'Project submitted successfully!',
                   );
-                  await _loadStudentData();
+                  await _refreshData();
                 }
               } catch (e) {
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Error: $e'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
+                  ErrorService.showErrorSnackBar(context, e);
                 }
               }
             },
@@ -300,13 +363,38 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               ],
             ),
           ),
+          // Offline indicator
+          if (_isOffline)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              color: Colors.orange[100],
+              child: const Row(
+                children: [
+                  Icon(Icons.wifi_off, color: Colors.orange),
+                  SizedBox(width: 8),
+                  Text(
+                    'You are offline. Some features may not work.',
+                    style: TextStyle(color: Colors.orange),
+                  ),
+                ],
+              ),
+            ),
           Expanded(
             child: StreamBuilder<List<ProjectModel>>(
               stream: Provider.of<DatabaseService>(context, listen: false)
                   .watchProjectsForStudent(_student!.uid),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const EnhancedLoadingWidget.circular(
+                    message: 'Loading your projects...',
+                  );
+                }
+
+                if (snapshot.hasData) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    _updateProjectsList(snapshot.data!);
+                  });
                 }
 
                 if (!snapshot.hasData || snapshot.data!.isEmpty) {
@@ -346,6 +434,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
 
                 return Column(
                   children: [
+                    // Status indicator
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(16),
@@ -371,111 +460,152 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                         ],
                       ),
                     ),
-                    Expanded(
-                      child: ListView.builder(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: projects.length,
-                        itemBuilder: (context, index) {
-                    final project = projects[index];
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 16),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    project.topic,
-                                    style: const TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                                _StatusChip(status: project.status),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              project.description,
-                              style: TextStyle(color: Colors.grey[700]),
-                            ),
-                            const SizedBox(height: 12),
-                            if (project.feedback != null) ...[
-                              Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: project.status == 'rejected'
-                                      ? Colors.red.shade50
-                                      : project.status == 'declined'
-                                          ? Colors.orange.shade50
-                                          : Colors.green.shade50,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Teacher Feedback:',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: project.status == 'rejected'
-                                            ? Colors.red
-                                            : project.status == 'declined'
-                                                ? Colors.orange
-                                                : Colors.green,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(project.feedback!),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                            ],
-                            if (project.status == 'declined')
-                              ElevatedButton.icon(
-                                icon: const Icon(Icons.refresh),
-                                label: const Text('Resubmit Project'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.orange,
-                                  foregroundColor: Colors.white,
-                                ),
-                                onPressed: () =>
-                                    _showSubmitProjectDialog(existingProject: project),
-                              ),
-                            if (project.status == 'rejected')
-                              Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: Colors.red.shade100,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: Colors.red.shade300),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.block, color: Colors.red.shade700),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Text(
-                                        'This project has been rejected and cannot be resubmitted.',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.red.shade700,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                          ],
+                    
+                    // Search and filter
+                    if (projects.length > 1)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                        child: SearchFilterWidget(
+                          onChanged: _onSearchFilterChanged,
+                          initialQuery: _searchQuery,
+                          initialSortBy: _sortBy,
+                          initialFilterBy: _filterBy,
+                          showStatusFilter: true,
                         ),
                       ),
-                    );
-                        },
+                    
+                    // Project list with pull-to-refresh
+                    Expanded(
+                      child: RefreshIndicator(
+                        onRefresh: _refreshData,
+                        child: _filteredProjects.isEmpty && _searchQuery.isNotEmpty
+                            ? Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.search_off,
+                                      size: 64,
+                                      color: Colors.grey[400],
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      'No projects found matching "$_searchQuery"',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        color: Colors.grey[600],
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : ListView.builder(
+                                padding: const EdgeInsets.all(16),
+                                itemCount: _filteredProjects.isEmpty ? projects.length : _filteredProjects.length,
+                                itemBuilder: (context, index) {
+                                  final projectList = _filteredProjects.isEmpty ? projects : _filteredProjects;
+                                  final project = projectList[index];
+                                  return Card(
+                                    margin: const EdgeInsets.only(bottom: 16),
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(16),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  project.topic,
+                                                  style: const TextStyle(
+                                                    fontSize: 18,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                              ),
+                                              _StatusChip(status: project.status),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Text(
+                                            project.description,
+                                            style: TextStyle(color: Colors.grey[700]),
+                                          ),
+                                          const SizedBox(height: 12),
+                                          if (project.feedback != null) ...[
+                                            Container(
+                                              padding: const EdgeInsets.all(12),
+                                              decoration: BoxDecoration(
+                                                color: project.status == 'rejected'
+                                                    ? Colors.red.shade50
+                                                    : project.status == 'declined'
+                                                        ? Colors.orange.shade50
+                                                        : Colors.green.shade50,
+                                                borderRadius: BorderRadius.circular(8),
+                                              ),
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    'Teacher Feedback:',
+                                                    style: TextStyle(
+                                                      fontWeight: FontWeight.bold,
+                                                      color: project.status == 'rejected'
+                                                          ? Colors.red
+                                                          : project.status == 'declined'
+                                                              ? Colors.orange
+                                                              : Colors.green,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 4),
+                                                  Text(project.feedback!),
+                                                ],
+                                              ),
+                                            ),
+                                            const SizedBox(height: 12),
+                                          ],
+                                          if (project.status == 'declined')
+                                            ElevatedButton.icon(
+                                              icon: const Icon(Icons.refresh),
+                                              label: const Text('Resubmit Project'),
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: Colors.orange,
+                                                foregroundColor: Colors.white,
+                                              ),
+                                              onPressed: () =>
+                                                  _showSubmitProjectDialog(existingProject: project),
+                                            ),
+                                          if (project.status == 'rejected')
+                                            Container(
+                                              padding: const EdgeInsets.all(12),
+                                              decoration: BoxDecoration(
+                                                color: Colors.red.shade100,
+                                                borderRadius: BorderRadius.circular(8),
+                                                border: Border.all(color: Colors.red.shade300),
+                                              ),
+                                              child: Row(
+                                                children: [
+                                                  Icon(Icons.block, color: Colors.red.shade700),
+                                                  const SizedBox(width: 12),
+                                                  Expanded(
+                                                    child: Text(
+                                                      'This project has been rejected and cannot be resubmitted.',
+                                                      style: TextStyle(
+                                                        fontWeight: FontWeight.bold,
+                                                        color: Colors.red.shade700,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
                       ),
                     ),
                   ],
