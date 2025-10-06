@@ -188,7 +188,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       content: Text('Error: $e'),
                       backgroundColor: Colors.red,
                     ),
-                  }
+                  );
                 }
               },
               child: const Text('Add Teacher'),

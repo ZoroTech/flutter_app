@@ -264,18 +264,16 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                   await dbService.submitProject(project);
                 }
 
-                if (mounted) {
-                  Navigator.pop(context);
-                  ErrorService.showSuccessSnackBar(
-                    context,
-                    'Project submitted successfully!',
-                  );
-                  await _refreshData();
-                }
+                if (!mounted) return;
+                Navigator.pop(context);
+                ErrorService.showSuccessSnackBar(
+                  context,
+                  'Project submitted successfully!',
+                );
+                await _refreshData();
               } catch (e) {
-                if (mounted) {
-                  ErrorService.showErrorSnackBar(context, e);
-                }
+                if (!mounted) return;
+                ErrorService.showErrorSnackBar(context, e);
               }
             },
             child: const Text('Submit'),
@@ -427,8 +425,6 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
 
                 final projects = snapshot.data!;
                 final hasApprovedProject = projects.any((p) => p.status == 'approved');
-                final hasRejectedProject = projects.any((p) => p.status == 'rejected');
-                final totalSubmitted = projects.where((p) => p.status != 'declined').length;
 
                 return Column(
                   children: [

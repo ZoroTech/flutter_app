@@ -318,7 +318,7 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
-                  value: _selectedYear,
+                  initialValue: _selectedYear,
                   decoration: const InputDecoration(
                     labelText: 'Year of Study',
                     prefixIcon: Icon(Icons.calendar_today),
@@ -343,7 +343,7 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
                 ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
-                  value: _selectedSemester,
+                  initialValue: _selectedSemester,
                   decoration: const InputDecoration(
                     labelText: 'Semester',
                     prefixIcon: Icon(Icons.numbers),
@@ -476,7 +476,7 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
                           )
                         else
                           DropdownButtonFormField<String>(
-                            value: _selectedTeacherUid,
+                            initialValue: _selectedTeacherUid,
                             decoration: InputDecoration(
                               hintText: 'Choose your guide teacher',
                               border: OutlineInputBorder(
