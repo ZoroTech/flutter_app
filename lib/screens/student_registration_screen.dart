@@ -527,7 +527,7 @@ class _StudentRegistrationScreenState extends State<StudentRegistrationScreen> {
                                       ),
                                     ))
                                 .toList(),
-                            onChanged: _isLoadingTeachers ? null : (value) {
+                            onChanged: (_isLoadingTeachers || _teachers.isEmpty) ? null : (value) {
                               if (value != null) {
                                 setState(() {
                                   _selectedTeacherUid = value;

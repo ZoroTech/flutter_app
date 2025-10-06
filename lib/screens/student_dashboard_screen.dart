@@ -8,6 +8,7 @@ import '../models/student_model.dart';
 import '../models/project_model.dart';
 import '../widgets/search_filter_widget.dart';
 import '../widgets/enhanced_loading_widget.dart';
+import '../widgets/similarity_check_widget.dart';
 import 'role_selection_screen.dart';
 class StudentDashboardScreen extends StatefulWidget {
   const StudentDashboardScreen({super.key});
@@ -106,28 +107,131 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     await _loadStudentData();
   }
 
-  double _calculateSimilarityScore(String topic, String description, List<Map<String, dynamic>> approvedProjects) {
-    if (approvedProjects.isEmpty) return 0.0;
-
-    final currentText = '${topic.toLowerCase()} ${description.toLowerCase()}';
-    final currentWords = currentText.split(RegExp(r'\s+'));
-
-    double maxSimilarity = 0.0;
-
-    for (var project in approvedProjects) {
-      final projectText = '${project['topic']?.toString().toLowerCase() ?? ''} ${project['description']?.toString().toLowerCase() ?? ''}';
-      final projectWords = projectText.split(RegExp(r'\s+'));
-
-      final commonWords = currentWords.where((word) => projectWords.contains(word) && word.length > 3).length;
-      final totalWords = (currentWords.length + projectWords.length) / 2;
-      final similarity = commonWords / totalWords;
-
-      if (similarity > maxSimilarity) {
-        maxSimilarity = similarity;
+  bool _areProjectListsEqual(List<ProjectModel> list1, List<ProjectModel> list2) {
+    if (list1.length != list2.length) return false;
+    for (int i = 0; i < list1.length; i++) {
+      if (list1[i].id != list2[i].id || 
+          list1[i].status != list2[i].status ||
+          list1[i].submittedAt != list2[i].submittedAt) {
+        return false;
       }
     }
+    return true;
+  }
 
-    return maxSimilarity;
+  /// Check similarity and show analysis dialog before submission
+  Future<void> _checkSimilarityAndSubmit(String title, String description) async {
+    // Show loading dialog
+    if (!mounted) return;
+    SimilarityCheckLoadingDialog.show(context);
+
+    try {
+      final dbService = Provider.of<DatabaseService>(context, listen: false);
+      
+      // Check similarity
+      final similarityResult = await dbService.checkProjectSimilarity(
+        title: title,
+        description: description,
+        studentYear: _student?.year,
+      );
+
+      if (!mounted) return;
+      Navigator.of(context).pop(); // Close loading dialog
+
+      // Show similarity analysis dialog
+      await SimilarityCheckDialog.show(
+        context: context,
+        result: similarityResult,
+        projectTitle: title,
+        projectDescription: description,
+        onConfirm: () async {
+          await _submitProjectDirectly(
+            title,
+            description,
+            similarityResult.suggestedDomain.domain,
+            similarityResult.maxSimilarity,
+          );
+        },
+        onCancel: () {
+          // User cancelled - nothing to do
+        },
+        onEdit: () {
+          // Re-open the edit dialog
+          _showSubmitProjectDialog();
+        },
+      );
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop(); // Close loading dialog
+        ErrorService.showErrorSnackBar(context, e);
+      }
+    }
+  }
+
+  /// Submit project directly without similarity check
+  Future<void> _submitProjectDirectly(
+    String title,
+    String description,
+    String domain,
+    double similarityScore,
+  ) async {
+    try {
+      final dbService = Provider.of<DatabaseService>(context, listen: false);
+
+      final project = ProjectModel(
+        studentUid: _student!.uid,
+        studentName: _student!.teamLeaderName,
+        teacherUid: _student!.teacherUid,
+        teacherName: _student!.teacherName,
+        topic: title,
+        description: description,
+        submittedAt: DateTime.now(),
+        year: _student!.year,
+        semester: _student!.semester,
+        teamMembers: _student!.teamMembers,
+        domain: domain,
+        similarityScore: similarityScore,
+      );
+
+      await dbService.submitProject(project);
+
+      if (mounted) {
+        ErrorService.showSuccessSnackBar(
+          context,
+          'Project submitted successfully!',
+        );
+        await _refreshData();
+      }
+    } catch (e) {
+      if (mounted) {
+        ErrorService.showErrorSnackBar(context, e);
+      }
+    }
+  }
+
+  /// Update existing project
+  Future<void> _updateExistingProject(
+    String projectId,
+    String title,
+    String description,
+  ) async {
+    try {
+      final dbService = Provider.of<DatabaseService>(context, listen: false);
+      
+      await dbService.updateProject(projectId, title, description);
+
+      if (mounted) {
+        ErrorService.showSuccessSnackBar(
+          context,
+          'Project updated successfully!',
+        );
+        await _refreshData();
+      }
+    } catch (e) {
+      if (mounted) {
+        ErrorService.showErrorSnackBar(context, e);
+      }
+    }
   }
 
   Future<void> _handleLogout() async {
@@ -205,6 +309,33 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             onPressed: () => Navigator.pop(context),
             child: const Text('Cancel'),
           ),
+          if (existingProject == null) // Only show for new projects
+            ElevatedButton.icon(
+              onPressed: () async {
+                if (topicController.text.trim().isEmpty ||
+                    descriptionController.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Please fill all fields'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                  return;
+                }
+                
+                Navigator.pop(context);
+                await _checkSimilarityAndSubmit(
+                  topicController.text.trim(),
+                  descriptionController.text.trim(),
+                );
+              },
+              icon: const Icon(Icons.analytics),
+              label: const Text('Check Similarity'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+              ),
+            ),
           ElevatedButton(
             onPressed: () async {
               if (topicController.text.trim().isEmpty ||
@@ -218,65 +349,26 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 return;
               }
 
-              final dbService =
-                  Provider.of<DatabaseService>(context, listen: false);
-
-              try {
-                if (existingProject != null) {
-                  await dbService.updateProject(
-                    existingProject.id!,
-                    topicController.text.trim(),
-                    descriptionController.text.trim(),
-                  );
-                } else {
-                  final domains = [
-                    'AI/ML',
-                    'Web Development',
-                    'Mobile Development',
-                    'IoT',
-                    'Blockchain',
-                    'Data Science'
-                  ];
-                  final randomDomain = (domains..shuffle()).first;
-
-                  final approvedProjects = await dbService.getApprovedProjectsByYear(_student!.year);
-                  final similarityScore = _calculateSimilarityScore(
-                    topicController.text.trim(),
-                    descriptionController.text.trim(),
-                    approvedProjects,
-                  );
-
-                  final project = ProjectModel(
-                    studentUid: _student!.uid,
-                    studentName: _student!.teamLeaderName,
-                    teacherUid: _student!.teacherUid,
-                    teacherName: _student!.teacherName,
-                    topic: topicController.text.trim(),
-                    description: descriptionController.text.trim(),
-                    submittedAt: DateTime.now(),
-                    year: _student!.year,
-                    semester: _student!.semester,
-                    teamMembers: _student!.teamMembers,
-                    domain: randomDomain,
-                    similarityScore: similarityScore,
-                  );
-
-                  await dbService.submitProject(project);
-                }
-
-                if (!mounted) return;
-                Navigator.pop(context);
-                ErrorService.showSuccessSnackBar(
-                  context,
-                  'Project submitted successfully!',
+              if (existingProject != null) {
+                // Direct update for resubmission
+                await _updateExistingProject(
+                  existingProject.id!,
+                  topicController.text.trim(),
+                  descriptionController.text.trim(),
                 );
-                await _refreshData();
-              } catch (e) {
-                if (!mounted) return;
-                ErrorService.showErrorSnackBar(context, e);
+              } else {
+                // For new projects, submit directly without similarity check
+                await _submitProjectDirectly(
+                  topicController.text.trim(),
+                  descriptionController.text.trim(),
+                  'Web Development', // Default domain
+                  0.0, // Default similarity
+                );
               }
+              
+              if (mounted) Navigator.pop(context);
             },
-            child: const Text('Submit'),
+            child: Text(existingProject != null ? 'Update' : 'Submit Directly'),
           ),
         ],
       ),
@@ -389,9 +481,15 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 }
 
                 if (snapshot.hasData) {
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    _updateProjectsList(snapshot.data!);
-                  });
+                  // Only update if the data has actually changed to prevent infinite rebuilds
+                  if (_allProjects.length != snapshot.data!.length ||
+                      !_areProjectListsEqual(_allProjects, snapshot.data!)) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted) {
+                        _updateProjectsList(snapshot.data!);
+                      }
+                    });
+                  }
                 }
 
                 if (!snapshot.hasData || snapshot.data!.isEmpty) {

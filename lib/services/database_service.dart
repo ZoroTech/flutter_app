@@ -3,6 +3,7 @@ import '../models/teacher_model.dart';
 import '../models/student_model.dart';
 import '../models/project_model.dart';
 import 'network_service.dart';
+import 'similarity_service.dart';
 
 class DatabaseService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -299,6 +300,56 @@ class DatabaseService {
               data['id'] = doc.id;
               return data;
             }).toList());
+  }
+
+  /// Check similarity and get domain suggestion for a new project
+  Future<SimilarityCheckResult> checkProjectSimilarity({
+    required String title,
+    required String description,
+    String? studentYear,
+  }) async {
+    return await NetworkService.instance.executeWithConnectivityCheck(
+      () async {
+        // Get all approved projects for similarity comparison
+        List<Map<String, dynamic>> existingProjects = [];
+        
+        if (studentYear != null) {
+          // First try to get projects from the same year
+          existingProjects = await getApprovedProjectsByYear(studentYear);
+        }
+        
+        // If we don't have enough projects from the same year, get from all years
+        if (existingProjects.length < 10) {
+          final allProjectsSnapshot = await _db.collection('approved_projects')
+              .orderBy('approvedAt', descending: true)
+              .limit(100) // Limit to recent 100 projects for performance
+              .get();
+          
+          existingProjects = allProjectsSnapshot.docs.map((doc) {
+            final data = doc.data();
+            data['id'] = doc.id;
+            return data;
+          }).toList();
+        }
+        
+        // Calculate similarity using our similarity service
+        return SimilarityService.calculateSimilarity(
+          title: title,
+          description: description,
+          existingProjects: existingProjects,
+        );
+      },
+      offlineMessage: 'Cannot check project similarity while offline.',
+    ) ?? SimilarityCheckResult(
+      topSimilarProjects: [],
+      suggestedDomain: DomainSuggestion(
+        domain: 'Web Development',
+        confidence: 0.0,
+        supportingProjects: [],
+      ),
+      hasHighSimilarity: false,
+      maxSimilarity: 0.0,
+    );
   }
 
   Future<void> initializeTeachers() async {
