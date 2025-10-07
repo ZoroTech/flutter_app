@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/project_model.dart';
 import '../services/database_service.dart';
+import '../services/similarity_service.dart';
 
 class ProjectDetailScreen extends StatefulWidget {
   final ProjectModel project;
@@ -15,17 +16,47 @@ class ProjectDetailScreen extends StatefulWidget {
 class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   final _feedbackController = TextEditingController();
   bool _isProcessing = false;
+  SimilarityCheckResult? _similarityResult;
+  bool _loadingSimilarity = false;
 
   @override
   void initState() {
     super.initState();
     _feedbackController.text = widget.project.feedback ?? '';
+    
+    // Always load similarity data to show comprehensive analysis
+    _loadSimilarityData();
   }
 
   @override
   void dispose() {
     _feedbackController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadSimilarityData() async {
+    setState(() => _loadingSimilarity = true);
+    
+    try {
+      final dbService = Provider.of<DatabaseService>(context, listen: false);
+      final similarityResult = await dbService.checkProjectSimilarity(
+        title: widget.project.topic,
+        description: widget.project.description,
+        studentYear: widget.project.year,
+      );
+      
+      if (mounted) {
+        setState(() {
+          _similarityResult = similarityResult;
+          _loadingSimilarity = false;
+        });
+      }
+    } catch (e) {
+      print('Error loading similarity data: $e');
+      if (mounted) {
+        setState(() => _loadingSimilarity = false);
+      }
+    }
   }
 
   Future<void> _handleApprove() async {
@@ -190,6 +221,313 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     if (score < 0.3) return Colors.green;
     if (score < 0.6) return Colors.orange;
     return Colors.red;
+  }
+
+  Widget _buildSimilarProjectsSection() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.analytics_outlined, color: Theme.of(context).colorScheme.primary),
+                const SizedBox(width: 8),
+                const Text(
+                  'Similarity Analysis',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Analysis of similar existing projects in the database',
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 16),
+            
+            if (_loadingSimilarity)
+              Container(
+                padding: const EdgeInsets.all(20),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(width: 16),
+                    Text('Analyzing similar projects...'),
+                  ],
+                ),
+              )
+            else if (_similarityResult != null && _similarityResult!.topSimilarProjects.isNotEmpty) ...
+            [
+              // Show summary first
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: _getSimilarityColor(_similarityResult!.maxSimilarity).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: _getSimilarityColor(_similarityResult!.maxSimilarity).withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      _similarityResult!.hasHighSimilarity ? Icons.warning : Icons.info,
+                      color: _getSimilarityColor(_similarityResult!.maxSimilarity),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Found ${_similarityResult!.topSimilarProjects.length} similar project(s)',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: _getSimilarityColor(_similarityResult!.maxSimilarity),
+                            ),
+                          ),
+                          Text(
+                            'Highest similarity: ${SimilarityService.getFormattedSimilarity(_similarityResult!.maxSimilarity)}',
+                            style: TextStyle(
+                              color: _getSimilarityColor(_similarityResult!.maxSimilarity),
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              
+              // Show individual projects
+              const Text(
+                'Similar Projects:',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Column(
+                children: _similarityResult!.topSimilarProjects
+                    .map((project) => _buildSimilarProjectCard(project))
+                    .toList(),
+              ),
+            ]
+            else if (_similarityResult != null && _similarityResult!.topSimilarProjects.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.green.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.check_circle_outline, color: Colors.green.shade700),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Unique Project!',
+                            style: TextStyle(
+                              color: Colors.green.shade700,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'No similar existing projects found above 10% similarity threshold. This appears to be a unique and original project idea.',
+                            style: TextStyle(
+                              color: Colors.green.shade700,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, color: Colors.grey.shade600),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Similarity analysis is currently unavailable. This may be due to database connectivity issues.',
+                        style: TextStyle(
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSimilarProjectCard(SimilarityResult project) {
+    final similarity = project.similarity;
+    final color = _getSimilarityColor(similarity);
+    final similarityLevel = SimilarityService.getSimilarityLevel(similarity);
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header with title and similarity score
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    project.projectTitle,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: color,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        SimilarityService.getFormattedSimilarity(similarity),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '$similarityLevel Similarity',
+                      style: TextStyle(
+                        color: color,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            
+            // Description
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Text(
+                project.projectDescription,
+                style: TextStyle(
+                  color: Colors.grey[700],
+                  fontSize: 14,
+                  height: 1.3,
+                ),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(height: 12),
+            
+            // Project metadata
+            Wrap(
+              spacing: 16,
+              runSpacing: 8,
+              children: [
+                _buildMetadataChip(
+                  icon: Icons.person,
+                  label: project.studentName,
+                  color: Colors.blue,
+                ),
+                _buildMetadataChip(
+                  icon: Icons.category,
+                  label: project.domain,
+                  color: Colors.purple,
+                ),
+                if (project.year != null)
+                  _buildMetadataChip(
+                    icon: Icons.school,
+                    label: '${project.year} - Sem ${project.semester ?? "?"}',
+                    color: Colors.green,
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildMetadataChip({
+    required IconData icon,
+    required String label,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -369,6 +707,10 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                       ],
                     ),
                   ),
+                  
+                  // Similar Projects Section - Always show for comprehensive analysis
+                  const SizedBox(height: 16),
+                  _buildSimilarProjectsSection(),
                   const SizedBox(height: 16),
                   _buildInfoCard(
                     icon: Icons.check_circle,
