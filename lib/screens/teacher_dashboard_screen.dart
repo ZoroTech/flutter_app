@@ -5,7 +5,6 @@ import '../services/database_service.dart';
 import '../services/similarity_service.dart';
 import '../models/teacher_model.dart';
 import '../models/project_model.dart';
-import '../widgets/similarity_check_widget.dart';
 import 'role_selection_screen.dart';
 import 'project_detail_screen.dart';
 

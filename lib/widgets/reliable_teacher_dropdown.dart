@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import '../models/teacher_model.dart';
@@ -31,7 +30,10 @@ class _ReliableTeacherDropdownState extends State<ReliableTeacherDropdown> {
   @override
   void initState() {
     super.initState();
-    _initializeTeachersStream();
+    // Initialize with default teachers immediately to prevent LateInitializationError
+    _teachersStream = Stream.value(_getDefaultTeachers());
+    // Then try to load real teachers
+    _loadTeachersFromDatabaseService();
   }
 
   void _initializeTeachersStream() {
@@ -366,9 +368,10 @@ class _ReliableTeacherDropdownState extends State<ReliableTeacherDropdown> {
   }
 
   Widget _buildDropdownField(List<TeacherModel> teachers) {
+
     return DropdownButtonFormField<String>(
-      value: widget.selectedTeacherUid,
-      menuMaxHeight: 300, // Set maximum height for dropdown menu
+      initialValue: widget.selectedTeacherUid,
+      menuMaxHeight: 300,
       decoration: InputDecoration(
         hintText: 'Choose your guide teacher',
         prefixIcon: const Icon(Icons.person),
@@ -380,16 +383,54 @@ class _ReliableTeacherDropdownState extends State<ReliableTeacherDropdown> {
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       ),
       isExpanded: true,
+      
+      // Custom selected item display (compact, single line)
+      selectedItemBuilder: (BuildContext context) {
+        return teachers.map((teacher) {
+          return Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                radius: 12, // Smaller for selected display
+                child: Text(
+                  teacher.name.isNotEmpty 
+                      ? teacher.name[0].toUpperCase()
+                      : 'T',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 10, // Smaller for selected display
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  teacher.name,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w500,
+                    fontSize: 14,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+              ),
+            ],
+          );
+        }).toList();
+      },
+      
+      // Dropdown items (detailed view)
       items: teachers.map((teacher) {
         return DropdownMenuItem(
           value: teacher.uid,
           child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4), // Reduced padding
             child: Row(
               children: [
                 CircleAvatar(
                   backgroundColor: Theme.of(context).colorScheme.primary,
-                  radius: 14, // Slightly smaller
+                  radius: 14,
                   child: Text(
                     teacher.name.isNotEmpty 
                         ? teacher.name[0].toUpperCase()
@@ -397,7 +438,7 @@ class _ReliableTeacherDropdownState extends State<ReliableTeacherDropdown> {
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
-                      fontSize: 11, // Slightly smaller
+                      fontSize: 11,
                     ),
                   ),
                 ),
@@ -411,16 +452,16 @@ class _ReliableTeacherDropdownState extends State<ReliableTeacherDropdown> {
                         teacher.name,
                         style: const TextStyle(
                           fontWeight: FontWeight.w500,
-                          fontSize: 13, // Slightly smaller
+                          fontSize: 13,
                         ),
                         overflow: TextOverflow.ellipsis,
                         maxLines: 1,
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 1), // Reduced spacing
                       Text(
                         teacher.email,
                         style: TextStyle(
-                          fontSize: 11, // Smaller
+                          fontSize: 10, // Even smaller
                           color: Colors.grey[600],
                         ),
                         overflow: TextOverflow.ellipsis,

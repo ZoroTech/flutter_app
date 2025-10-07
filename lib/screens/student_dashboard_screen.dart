@@ -6,7 +6,6 @@ import '../services/error_service.dart';
 import '../services/network_service.dart';
 import '../models/student_model.dart';
 import '../models/project_model.dart';
-import '../widgets/search_filter_widget.dart';
 import '../widgets/enhanced_loading_widget.dart';
 import '../widgets/similarity_check_widget.dart';
 import 'role_selection_screen.dart';
@@ -20,11 +19,6 @@ class StudentDashboardScreen extends StatefulWidget {
 class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   StudentModel? _student;
   bool _isLoading = true;
-  List<ProjectModel> _allProjects = [];
-  List<ProjectModel> _filteredProjects = [];
-  String _searchQuery = '';
-  ProjectSortBy _sortBy = ProjectSortBy.newest;
-  ProjectFilterBy _filterBy = ProjectFilterBy.all;
   bool _isOffline = false;
 
   @override
@@ -77,47 +71,11 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     }
   }
 
-  void _onSearchFilterChanged(String query, ProjectSortBy sortBy, ProjectFilterBy filterBy) {
-    setState(() {
-      _searchQuery = query;
-      _sortBy = sortBy;
-      _filterBy = filterBy;
-      _filteredProjects = ProjectSearchHelper.searchAndFilterProjects(
-        _allProjects,
-        query,
-        sortBy,
-        filterBy,
-      );
-    });
-  }
-
-  void _updateProjectsList(List<ProjectModel> projects) {
-    setState(() {
-      _allProjects = projects;
-      _filteredProjects = ProjectSearchHelper.searchAndFilterProjects(
-        _allProjects,
-        _searchQuery,
-        _sortBy,
-        _filterBy,
-      );
-    });
-  }
 
   Future<void> _refreshData() async {
     await _loadStudentData();
   }
 
-  bool _areProjectListsEqual(List<ProjectModel> list1, List<ProjectModel> list2) {
-    if (list1.length != list2.length) return false;
-    for (int i = 0; i < list1.length; i++) {
-      if (list1[i].id != list2[i].id || 
-          list1[i].status != list2[i].status ||
-          list1[i].submittedAt != list2[i].submittedAt) {
-        return false;
-      }
-    }
-    return true;
-  }
 
   /// Check similarity and show analysis dialog before submission
   Future<void> _checkSimilarityAndSubmit(String title, String description) async {
@@ -480,17 +438,6 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                   );
                 }
 
-                if (snapshot.hasData) {
-                  // Only update if the data has actually changed to prevent infinite rebuilds
-                  if (_allProjects.length != snapshot.data!.length ||
-                      !_areProjectListsEqual(_allProjects, snapshot.data!)) {
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (mounted) {
-                        _updateProjectsList(snapshot.data!);
-                      }
-                    });
-                  }
-                }
 
                 if (!snapshot.hasData || snapshot.data!.isEmpty) {
                   return Center(
@@ -553,51 +500,15 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                       ),
                     ),
                     
-                    // Search and filter
-                    if (projects.length > 1)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                        child: SearchFilterWidget(
-                          onChanged: _onSearchFilterChanged,
-                          initialQuery: _searchQuery,
-                          initialSortBy: _sortBy,
-                          initialFilterBy: _filterBy,
-                          showStatusFilter: true,
-                        ),
-                      ),
-                    
                     // Project list with pull-to-refresh
                     Expanded(
                       child: RefreshIndicator(
                         onRefresh: _refreshData,
-                        child: _filteredProjects.isEmpty && _searchQuery.isNotEmpty
-                            ? Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      Icons.search_off,
-                                      size: 64,
-                                      color: Colors.grey[400],
-                                    ),
-                                    const SizedBox(height: 16),
-                                    Text(
-                                      'No projects found matching "$_searchQuery"',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        color: Colors.grey[600],
-                                      ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ],
-                                ),
-                              )
-                            : ListView.builder(
-                                padding: const EdgeInsets.all(16),
-                                itemCount: _filteredProjects.isEmpty ? projects.length : _filteredProjects.length,
-                                itemBuilder: (context, index) {
-                                  final projectList = _filteredProjects.isEmpty ? projects : _filteredProjects;
-                                  final project = projectList[index];
+                        child: ListView.builder(
+                          padding: const EdgeInsets.all(16),
+                          itemCount: projects.length,
+                          itemBuilder: (context, index) {
+                            final project = projects[index];
                                   return Card(
                                     margin: const EdgeInsets.only(bottom: 16),
                                     child: Padding(
@@ -689,15 +600,15 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                                                       ),
                                                     ),
                                                   ),
-                                                ],
-                                              ),
+                                              ],
                                             ),
-                                        ],
-                                      ),
+                                          ),
+                                      ],
                                     ),
-                                  );
-                                },
-                              ),
+                                  ),
+                                );
+                              },
+                            ),
                       ),
                     ),
                   ],
