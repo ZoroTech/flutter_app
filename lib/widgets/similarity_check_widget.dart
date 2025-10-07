@@ -100,11 +100,9 @@ class SimilarityCheckDialog extends StatelessWidget {
                     // Similarity Analysis
                     _buildSimilarityAnalysis(),
 
-                    // Similar Projects
-                    if (result.topSimilarProjects.isNotEmpty) ...[
-                      const SizedBox(height: 20),
-                      _buildSimilarProjects(),
-                    ],
+                    // Similar Projects Section
+                    const SizedBox(height: 20),
+                    _buildSimilarProjectsSection(),
 
                     // High Similarity Warning
                     if (result.hasHighSimilarity) ...[
@@ -339,7 +337,7 @@ class SimilarityCheckDialog extends StatelessWidget {
     );
   }
 
-  Widget _buildSimilarProjects() {
+  Widget _buildSimilarProjectsSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -351,8 +349,53 @@ class SimilarityCheckDialog extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
-        ...result.topSimilarProjects.map((project) => _buildSimilarProjectCard(project)),
+        if (result.topSimilarProjects.isNotEmpty)
+          ...result.topSimilarProjects.map((project) => _buildSimilarProjectCard(project))
+        else
+          _buildNoSimilarProjectsCard(),
       ],
+    );
+  }
+
+  Widget _buildNoSimilarProjectsCard() {
+    return Card(
+      color: Colors.green[50],
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Icon(
+              Icons.check_circle_outline,
+              color: Colors.green[700],
+              size: 32,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Great! No Similar Projects Found',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green[700],
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Your project appears to be unique with no significant similarity (>10%) to existing submissions. This indicates good originality.',
+                    style: TextStyle(
+                      color: Colors.green[600],
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

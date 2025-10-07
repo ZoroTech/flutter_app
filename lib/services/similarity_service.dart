@@ -50,6 +50,7 @@ class SimilarityCheckResult {
 
 class SimilarityService {
   static const double highSimilarityThreshold = 0.7;
+  static const double minimumSimilarityThreshold = 0.1; // Only show projects with >10% similarity
   static const int maxSimilarProjects = 3;
 
   /// Calculate TF-IDF similarity between a new project and existing projects
@@ -93,9 +94,16 @@ class SimilarityService {
       ));
     }
     
-    // Sort by similarity (highest first) and take top results
+    // Sort by similarity (highest first) and filter out low similarity results
     similarities.sort((a, b) => b.similarity.compareTo(a.similarity));
-    final topSimilarities = similarities.take(maxSimilarProjects).toList();
+    
+    // Filter out projects with very low similarity (less than 10%) to show only meaningful results
+    final filteredSimilarities = similarities
+        .where((result) => result.similarity >= minimumSimilarityThreshold)
+        .toList();
+    
+    // Take top results from filtered list
+    final topSimilarities = filteredSimilarities.take(maxSimilarProjects).toList();
     
     // Calculate domain suggestion with fallback to smart analysis
     final domainSuggestion = _calculateDomainSuggestion(similarities, title, description);
