@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
 import '../models/teacher_model.dart';
+import '../services/database_service.dart';
 
 class ReliableTeacherDropdown extends StatefulWidget {
   final String? selectedTeacherUid;
@@ -35,10 +37,15 @@ class _ReliableTeacherDropdownState extends State<ReliableTeacherDropdown> {
   void _initializeTeachersStream() {
     // Check if we should force offline mode or if user is not authenticated
     final user = FirebaseAuth.instance.currentUser;
-    final shouldUseOffline = widget.forceOfflineMode || user == null;
     
-    if (shouldUseOffline) {
-      print('📴 Using offline teacher list (user: ${user?.email ?? "not authenticated"})');
+    if (widget.forceOfflineMode) {
+      print('📴 Using offline teacher list (forced offline mode)');
+      _loadTeachersFromDatabaseService();
+      return;
+    }
+    
+    if (user == null) {
+      print('📴 Using offline teacher list (user not authenticated)');
       _teachersStream = Stream.value(_getDefaultTeachers());
       setState(() {
         _hasError = false;
@@ -47,38 +54,25 @@ class _ReliableTeacherDropdownState extends State<ReliableTeacherDropdown> {
       return;
     }
     
-    try {
-      print('🌐 Attempting to load teachers from Firestore for user: ${user?.email}');
-      // Try to load teachers from Firestore, but gracefully fallback to defaults
-      _teachersStream = FirebaseFirestore.instance
-          .collection('teachers')
-          .snapshots()
-          .map((snapshot) {
-        if (snapshot.docs.isEmpty) {
-          print('🔄 No teachers found in Firestore, using defaults');
-          return _getDefaultTeachers();
-        }
-        print('✅ Loaded ${snapshot.docs.length} teachers from Firestore');
-        return snapshot.docs
-            .map((doc) => TeacherModel.fromMap(doc.data()))
-            .toList();
-      }).handleError((error) {
-        print('❌ Firestore error: $error');
-        setState(() {
-          _hasError = true;
-          _errorMessage = 'Using offline teacher list';
-        });
-        // Always return default teachers on any error (including permission issues)
-        return Stream.value(_getDefaultTeachers());
-      });
+    print('🌐 Attempting to load teachers from DatabaseService for user: ${user.email}');
+    _loadTeachersFromDatabaseService();
+  }
 
+  void _loadTeachersFromDatabaseService() async {
+    try {
+      final dbService = Provider.of<DatabaseService>(context, listen: false);
+      final teachers = await dbService.getAllTeachers();
+      
+      print('✅ Loaded ${teachers.length} teachers from DatabaseService');
+      
+      _teachersStream = Stream.value(teachers);
       setState(() {
         _hasError = false;
         _errorMessage = null;
       });
     } catch (e) {
-      print('❌ Failed to initialize teachers stream: $e');
-      // If anything fails, just use default teachers
+      print('❌ Failed to load teachers from DatabaseService: $e');
+      // Fallback to default teachers
       _teachersStream = Stream.value(_getDefaultTeachers());
       setState(() {
         _hasError = true;
@@ -109,6 +103,16 @@ class _ReliableTeacherDropdownState extends State<ReliableTeacherDropdown> {
         email: 'teacher4@pvppcoe.ac.in',
         name: 'Prof. Snehal Patil',
       ),
+      TeacherModel(
+        uid: 'default_teacher_5',
+        email: 'teacher5@pvppcoe.ac.in',
+        name: 'Dr. Suresh Mehta',
+      ),
+      TeacherModel(
+        uid: 'default_teacher_6',
+        email: 'teacher6@pvppcoe.ac.in',
+        name: 'Prof. Kavita Joshi',
+      ),
     ];
   }
 
@@ -118,7 +122,7 @@ class _ReliableTeacherDropdownState extends State<ReliableTeacherDropdown> {
       _hasError = false;
       _errorMessage = null;
     });
-    _initializeTeachersStream();
+    _loadTeachersFromDatabaseService();
   }
 
   @override

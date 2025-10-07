@@ -83,79 +83,6 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
     return grouped;
   }
 
-  Future<void> _checkProjectSimilarity(BuildContext context, ProjectModel project) async {
-    try {
-      // Show loading dialog
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const SimilarityCheckLoadingDialog(),
-      );
-
-      // Get all existing projects for comparison
-      final dbService = Provider.of<DatabaseService>(context, listen: false);
-      final allProjects = await dbService.getAllProjects();
-      
-      // Convert to the format expected by SimilarityService
-      final existingProjects = allProjects
-          .where((p) => p.id != null && p.id != project.id) // Exclude the current project
-          .map((p) => {
-            'id': p.id!,
-            'topic': p.topic,
-            'description': p.description,
-            'domain': p.domain,
-            'studentName': p.studentName,
-            'year': p.year,
-            'semester': p.semester,
-          })
-          .toList();
-
-      // Perform similarity analysis
-      final result = SimilarityService.calculateSimilarity(
-        title: project.topic,
-        description: project.description,
-        existingProjects: existingProjects,
-      );
-
-      // Close loading dialog
-      if (mounted) Navigator.of(context).pop();
-
-      // Show results dialog
-      if (mounted) {
-        await SimilarityCheckDialog.show(
-          context: context,
-          result: result,
-          projectTitle: project.topic,
-          projectDescription: project.description,
-          onConfirm: () {
-            // Teacher can take action based on similarity results
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  result.hasHighSimilarity 
-                      ? 'High similarity detected. Consider reviewing this project carefully.'
-                      : 'Similarity analysis completed successfully.',
-                ),
-                backgroundColor: result.hasHighSimilarity ? Colors.orange : Colors.green,
-              ),
-            );
-          },
-        );
-      }
-    } catch (e) {
-      // Close loading dialog if still open
-      if (mounted) Navigator.of(context).pop();
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error performing similarity check: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -315,7 +242,6 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
                                 ),
                               );
                             },
-                            onSimilarityCheck: (project) => _checkProjectSimilarity(context, project),
                           );
                         },
                       ),
@@ -902,7 +828,6 @@ class _TeamLeaderCard extends StatelessWidget {
   final List<String> teamMembers;
   final List<ProjectModel> projects;
   final Function(ProjectModel) onProjectTap;
-  final Function(ProjectModel)? onSimilarityCheck;
 
   const _TeamLeaderCard({
     required this.teamLeaderName,
@@ -911,7 +836,6 @@ class _TeamLeaderCard extends StatelessWidget {
     required this.teamMembers,
     required this.projects,
     required this.onProjectTap,
-    this.onSimilarityCheck,
   });
 
   @override
@@ -973,9 +897,6 @@ class _TeamLeaderCard extends StatelessWidget {
             ...projects.map((project) => _ProjectTile(
                   project: project,
                   onTap: () => onProjectTap(project),
-                  onSimilarityCheck: onSimilarityCheck != null 
-                      ? () => onSimilarityCheck!(project)
-                      : null,
                 )),
           ],
         ),
@@ -987,12 +908,10 @@ class _TeamLeaderCard extends StatelessWidget {
 class _ProjectTile extends StatelessWidget {
   final ProjectModel project;
   final VoidCallback onTap;
-  final VoidCallback? onSimilarityCheck;
 
   const _ProjectTile({
     required this.project,
     required this.onTap,
-    this.onSimilarityCheck,
   });
 
   @override
@@ -1056,17 +975,6 @@ class _ProjectTile extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  if (onSimilarityCheck != null) ...[
-                    TextButton.icon(
-                      onPressed: onSimilarityCheck,
-                      icon: const Icon(Icons.analytics, size: 18),
-                      label: const Text('Check Similarity'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.blue,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                  ],
                   TextButton.icon(
                     onPressed: onTap,
                     icon: const Icon(Icons.visibility, size: 18),

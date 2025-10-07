@@ -93,6 +93,16 @@ class DatabaseService {
         email: 'teacher4@pvppcoe.ac.in',
         name: 'Prof. Snehal Patil',
       ),
+      TeacherModel(
+        uid: 'default_teacher_5',
+        email: 'teacher5@pvppcoe.ac.in',
+        name: 'Dr. Suresh Mehta',
+      ),
+      TeacherModel(
+        uid: 'default_teacher_6',
+        email: 'teacher6@pvppcoe.ac.in',
+        name: 'Prof. Kavita Joshi',
+      ),
     ];
   }
 
@@ -446,6 +456,16 @@ class DatabaseService {
             'email': 'teacher4@pvppcoe.ac.in',
             'name': 'Prof. Snehal Patil',
             'uid': 'default_teacher_4',
+          },
+          {
+            'email': 'teacher5@pvppcoe.ac.in',
+            'name': 'Dr. Suresh Mehta',
+            'uid': 'default_teacher_5',
+          },
+          {
+            'email': 'teacher6@pvppcoe.ac.in',
+            'name': 'Prof. Kavita Joshi',
+            'uid': 'default_teacher_6',
           },
         ];
 

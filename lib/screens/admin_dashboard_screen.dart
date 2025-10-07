@@ -6,7 +6,6 @@ import '../services/auth_service.dart';
 import '../services/database_service.dart';
 import '../models/teacher_model.dart';
 import 'role_selection_screen.dart';
-import 'past_projects_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -205,18 +204,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       appBar: AppBar(
         title: const Text('Admin Dashboard'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.folder_open),
-            tooltip: 'View Past Projects',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const PastProjectsScreen(),
-                ),
-              );
-            },
-          ),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: _handleLogout,

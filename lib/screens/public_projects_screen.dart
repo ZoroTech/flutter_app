@@ -65,6 +65,8 @@ class _PublicProjectsScreenState extends State<PublicProjectsScreen> {
   Stream<List<Map<String, dynamic>>> _getProjectsStream() {
     Query query = FirebaseFirestore.instance.collection('approved_projects');
     
+    final bool hasFilters = _selectedYear != null || _selectedDomain != null || _selectedAcademicYear != null;
+    
     if (_selectedYear != null) {
       query = query.where('year', isEqualTo: _selectedYear);
     }
@@ -77,8 +79,12 @@ class _PublicProjectsScreenState extends State<PublicProjectsScreen> {
       query = query.where('academicYear', isEqualTo: int.parse(_selectedAcademicYear!));
     }
     
+    // Only add orderBy when no filters are applied to avoid composite index requirements
+    if (!hasFilters) {
+      query = query.orderBy('approvedAt', descending: true);
+    }
+    
     return query
-        .orderBy('approvedAt', descending: true)
         .limit(100) // Limit for performance
         .snapshots()
         .map((snapshot) {
@@ -87,6 +93,18 @@ class _PublicProjectsScreenState extends State<PublicProjectsScreen> {
         data['id'] = doc.id;
         return data;
       }).toList();
+      
+      // Apply client-side sorting when filters are applied (since we can't use orderBy with complex queries)
+      if (hasFilters) {
+        projects.sort((a, b) {
+          final aTime = a['approvedAt'] as Timestamp?;
+          final bTime = b['approvedAt'] as Timestamp?;
+          if (aTime == null && bTime == null) return 0;
+          if (aTime == null) return 1;
+          if (bTime == null) return -1;
+          return bTime.compareTo(aTime); // Descending order (newest first)
+        });
+      }
       
       // Apply search filter
       if (_searchQuery.isNotEmpty) {
