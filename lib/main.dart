@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 import 'firebase_options.dart';
-import 'screens/role_selection_screen.dart';
+import 'screens/splash_screen.dart';
 import 'services/auth_service.dart';
 import 'services/database_service.dart';
 import 'services/network_service.dart';
@@ -65,7 +65,7 @@ class MyApp extends StatelessWidget {
             ),
           ),
         ),
-        home: const RoleSelectionScreen(),
+        home: const SplashScreen(),
       ),
     );
   }

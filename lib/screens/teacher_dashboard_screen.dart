@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
 import '../services/database_service.dart';
+import '../services/similarity_service.dart';
 import '../models/teacher_model.dart';
 import '../models/project_model.dart';
 import 'role_selection_screen.dart';
@@ -57,6 +58,15 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
     }
   }
 
+  void _showSimilarityCheckDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => _SimilarityAnalysisDialog(
+        teacherUid: _teacher?.uid ?? '',
+      ),
+    );
+  }
+
   Map<String, List<ProjectModel>> _groupProjectsByTeamLeader(
       List<ProjectModel> projects) {
     final Map<String, List<ProjectModel>> grouped = {};
@@ -71,6 +81,7 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
 
     return grouped;
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -101,6 +112,11 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
       appBar: AppBar(
         title: const Text('Teacher Dashboard'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.analytics),
+            tooltip: 'Check Project Similarities',
+            onPressed: () => _showSimilarityCheckDialog(context),
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: _handleLogout,
@@ -235,6 +251,570 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SimilarityAnalysisDialog extends StatefulWidget {
+  final String teacherUid;
+
+  const _SimilarityAnalysisDialog({
+    required this.teacherUid,
+  });
+
+  @override
+  State<_SimilarityAnalysisDialog> createState() => _SimilarityAnalysisDialogState();
+}
+
+class _SimilarityAnalysisDialogState extends State<_SimilarityAnalysisDialog> {
+  bool _isLoading = true;
+  List<ProjectModel> _allProjects = [];
+  Map<String, List<SimilarityResult>> _similarityMatrix = {};
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _performBulkSimilarityAnalysis();
+  }
+
+  Future<void> _performBulkSimilarityAnalysis() async {
+    try {
+      final dbService = Provider.of<DatabaseService>(context, listen: false);
+      final allProjects = await dbService.getAllProjects();
+      
+      setState(() {
+        _allProjects = allProjects;
+      });
+
+      // Perform similarity analysis for each project against all others
+      Map<String, List<SimilarityResult>> matrix = {};
+      
+      for (int i = 0; i < allProjects.length; i++) {
+        final currentProject = allProjects[i];
+        if (currentProject.id == null) continue; // Skip projects without IDs
+        
+        final otherProjects = allProjects
+            .where((p) => p.id != null && p.id != currentProject.id)
+            .map((p) => {
+              'id': p.id!,
+              'topic': p.topic,
+              'description': p.description,
+              'domain': p.domain,
+              'studentName': p.studentName,
+              'year': p.year,
+              'semester': p.semester,
+            })
+            .toList();
+
+        final result = SimilarityService.calculateSimilarity(
+          title: currentProject.topic,
+          description: currentProject.description,
+          existingProjects: otherProjects,
+        );
+
+        matrix[currentProject.id!] = result.topSimilarProjects;
+      }
+
+      setState(() {
+        _similarityMatrix = matrix;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 800, maxHeight: 700),
+        child: Column(
+          children: [
+            // Header
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Theme.of(context).colorScheme.primary,
+                    Theme.of(context).colorScheme.secondary,
+                  ],
+                ),
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(12),
+                  topRight: Radius.circular(12),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.analytics,
+                    color: Colors.white,
+                    size: 28,
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Project Similarity Analysis Dashboard',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close, color: Colors.white),
+                  ),
+                ],
+              ),
+            ),
+
+            // Content
+            Expanded(
+              child: _isLoading
+                  ? const Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          CircularProgressIndicator(),
+                          SizedBox(height: 16),
+                          Text(
+                            'Analyzing project similarities...',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : _error != null
+                      ? Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.error_outline,
+                                  size: 64,
+                                  color: Colors.red[400],
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'Error performing similarity analysis',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.red[700],
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  _error!,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(color: Colors.grey[600]),
+                                ),
+                                const SizedBox(height: 20),
+                                ElevatedButton(
+                                  onPressed: () {
+                                    setState(() {
+                                      _error = null;
+                                      _isLoading = true;
+                                    });
+                                    _performBulkSimilarityAnalysis();
+                                  },
+                                  child: const Text('Retry'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      : _buildAnalysisResults(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAnalysisResults() {
+    if (_allProjects.isEmpty) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.assignment_outlined,
+              size: 80,
+              color: Colors.grey,
+            ),
+            SizedBox(height: 16),
+            Text(
+              'No projects available for analysis',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w500,
+                color: Colors.grey,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Calculate statistics
+    final highSimilarityProjects = _similarityMatrix.entries
+        .where((entry) => entry.value.any((result) => result.similarity > 0.7))
+        .length;
+    final totalProjects = _allProjects.length;
+    
+    // Group projects by domain for analysis
+    final domainGroups = <String, List<ProjectModel>>{};
+    for (final project in _allProjects) {
+      domainGroups[project.domain] = (domainGroups[project.domain] ?? [])..add(project);
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Statistics Cards
+          Row(
+            children: [
+              Expanded(
+                child: _StatCard(
+                  title: 'Total Projects',
+                  value: totalProjects.toString(),
+                  icon: Icons.assignment,
+                  color: Colors.blue,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _StatCard(
+                  title: 'High Similarity',
+                  value: highSimilarityProjects.toString(),
+                  icon: Icons.warning,
+                  color: Colors.orange,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _StatCard(
+                  title: 'Domains',
+                  value: domainGroups.length.toString(),
+                  icon: Icons.category,
+                  color: Colors.green,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // Projects with High Similarity
+          if (highSimilarityProjects > 0) ...[
+            const Text(
+              'Projects with High Similarity (>70%)',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ..._buildHighSimilarityProjects(),
+            const SizedBox(height: 20),
+          ],
+
+          // All Projects Analysis
+          const Text(
+            'All Projects Similarity Analysis',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 12),
+          ..._buildAllProjectsAnalysis(),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildHighSimilarityProjects() {
+    final highSimilarityEntries = _similarityMatrix.entries
+        .where((entry) => entry.value.any((result) => result.similarity > 0.7))
+        .toList();
+
+    return highSimilarityEntries.map((entry) {
+      final project = _allProjects.firstWhere((p) => p.id == entry.key, orElse: () => _allProjects.first);
+      final highSimilarResults = entry.value.where((r) => r.similarity > 0.7).toList();
+      
+      return Card(
+        margin: const EdgeInsets.only(bottom: 12),
+        color: Colors.orange[50],
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.warning, color: Colors.orange[700]),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      project.topic,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.orange[700],
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      project.domain,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'by ${project.studentName} (${project.year} - Sem ${project.semester})',
+                style: TextStyle(color: Colors.grey[600]),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Similar to ${highSimilarResults.length} project${highSimilarResults.length > 1 ? 's' : ''}:',
+                style: TextStyle(
+                  fontWeight: FontWeight.w500,
+                  color: Colors.orange[700],
+                ),
+              ),
+              const SizedBox(height: 8),
+              ...highSimilarResults.map((result) => Padding(
+                padding: const EdgeInsets.only(left: 16, bottom: 4),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '• ${result.projectTitle} (${result.studentName})',
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.red[100],
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '${(result.similarity * 100).toStringAsFixed(1)}%',
+                        style: TextStyle(
+                          color: Colors.red[700],
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              )),
+            ],
+          ),
+        ),
+      );
+    }).toList();
+  }
+
+  List<Widget> _buildAllProjectsAnalysis() {
+    return _allProjects.where((project) => project.id != null).map((project) {
+      final similarities = _similarityMatrix[project.id!] ?? [];
+      final maxSimilarity = similarities.isNotEmpty 
+          ? similarities.first.similarity 
+          : 0.0;
+      final similarityColor = _getSimilarityColor(maxSimilarity);
+      
+      return Card(
+        margin: const EdgeInsets.only(bottom: 12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          project.topic,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'by ${project.studentName} (${project.year} - Sem ${project.semester})',
+                          style: TextStyle(color: Colors.grey[600]),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: similarityColor.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: similarityColor.withValues(alpha: 0.3)),
+                        ),
+                        child: Text(
+                          '${(maxSimilarity * 100).toStringAsFixed(1)}%',
+                          style: TextStyle(
+                            color: similarityColor,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.blue[100],
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          project.domain,
+                          style: TextStyle(
+                            color: Colors.blue[700],
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              if (similarities.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'Top similar projects:',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w500,
+                    color: Colors.grey[700],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ...similarities.take(3).map((result) => Padding(
+                  padding: const EdgeInsets.only(left: 16, bottom: 4),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '• ${result.projectTitle}',
+                          style: const TextStyle(fontSize: 13),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Text(
+                        '${(result.similarity * 100).toStringAsFixed(1)}%',
+                        style: TextStyle(
+                          color: _getSimilarityColor(result.similarity),
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                )),
+              ],
+            ],
+          ),
+        ),
+      );
+    }).toList();
+  }
+
+  Color _getSimilarityColor(double similarity) {
+    if (similarity > 0.7) {
+      return Colors.red;
+    } else if (similarity > 0.4) {
+      return Colors.orange;
+    } else {
+      return Colors.green;
+    }
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  final String title;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  const _StatCard({
+    required this.title,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Icon(icon, color: color, size: 32),
+            const SizedBox(height: 8),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }

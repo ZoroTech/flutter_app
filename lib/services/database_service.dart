@@ -3,6 +3,7 @@ import '../models/teacher_model.dart';
 import '../models/student_model.dart';
 import '../models/project_model.dart';
 import 'network_service.dart';
+import 'similarity_service.dart';
 
 class DatabaseService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -32,15 +33,77 @@ class DatabaseService {
   }
 
   Future<List<TeacherModel>> getAllTeachers() async {
-    return await NetworkService.instance.executeWithConnectivityCheck(
-      () async {
-        final snapshot = await _db.collection('teachers').get();
-        return snapshot.docs
-            .map((doc) => TeacherModel.fromMap(doc.data()))
-            .toList();
-      },
-      offlineMessage: 'Cannot load teachers while offline. Please check your connection.',
-    ) ?? [];
+    try {
+      return await NetworkService.instance.executeWithConnectivityCheck(
+        () async {
+          // First try to initialize teachers if the collection is empty
+          await initializeTeachers();
+          
+          final snapshot = await _db.collection('teachers').get();
+          return snapshot.docs
+              .map((doc) => TeacherModel.fromMap(doc.data()))
+              .toList();
+        },
+        offlineMessage: 'Cannot load teachers while offline. Please check your connection.',
+      ) ?? [];
+    } catch (e) {
+      print('Error in getAllTeachers: $e');
+      
+      // If there's a permission error, try to initialize teachers and retry
+      if (e.toString().contains('permission-denied')) {
+        try {
+          await initializeTeachers();
+          // Retry once after initialization
+          final snapshot = await _db.collection('teachers').get();
+          return snapshot.docs
+              .map((doc) => TeacherModel.fromMap(doc.data()))
+              .toList();
+        } catch (retryError) {
+          print('Retry failed: $retryError');
+          // Return default teachers as fallback
+          return _getDefaultTeachers();
+        }
+      }
+      
+      // For other errors, return default teachers
+      return _getDefaultTeachers();
+    }
+  }
+
+  /// Get default teachers as fallback when Firestore access fails
+  List<TeacherModel> _getDefaultTeachers() {
+    return [
+      TeacherModel(
+        uid: 'default_teacher_1',
+        email: 'teacher1@pvppcoe.ac.in',
+        name: 'Dr. Rajesh Kumar',
+      ),
+      TeacherModel(
+        uid: 'default_teacher_2',
+        email: 'teacher2@pvppcoe.ac.in',
+        name: 'Prof. Priya Sharma',
+      ),
+      TeacherModel(
+        uid: 'default_teacher_3',
+        email: 'teacher3@pvppcoe.ac.in',
+        name: 'Dr. Amit Patel',
+      ),
+      TeacherModel(
+        uid: 'default_teacher_4',
+        email: 'teacher4@pvppcoe.ac.in',
+        name: 'Prof. Snehal Patil',
+      ),
+      TeacherModel(
+        uid: 'default_teacher_5',
+        email: 'teacher5@pvppcoe.ac.in',
+        name: 'Dr. Suresh Mehta',
+      ),
+      TeacherModel(
+        uid: 'default_teacher_6',
+        email: 'teacher6@pvppcoe.ac.in',
+        name: 'Prof. Kavita Joshi',
+      ),
+    ];
   }
 
   Future<TeacherModel?> getTeacher(String uid) async {
@@ -116,6 +179,22 @@ class DatabaseService {
     return snapshot.docs
         .map((doc) => ProjectModel.fromMap(doc.data()))
         .toList();
+  }
+
+  Future<List<ProjectModel>> getAllProjects() async {
+    return await NetworkService.instance.executeWithConnectivityCheck(
+      () async {
+        final snapshot = await _db
+            .collection('projects')
+            .orderBy('submittedAt', descending: true)
+            .get();
+
+        return snapshot.docs
+            .map((doc) => ProjectModel.fromMap(doc.data()))
+            .toList();
+      },
+      offlineMessage: 'Cannot load all projects while offline.',
+    ) ?? [];
   }
 
   Future<void> updateProjectStatus(
@@ -301,35 +380,111 @@ class DatabaseService {
             }).toList());
   }
 
+  /// Check similarity and get domain suggestion for a new project
+  Future<SimilarityCheckResult> checkProjectSimilarity({
+    required String title,
+    required String description,
+    String? studentYear,
+  }) async {
+    return await NetworkService.instance.executeWithConnectivityCheck(
+      () async {
+        // Get all approved projects for similarity comparison
+        List<Map<String, dynamic>> existingProjects = [];
+        
+        if (studentYear != null) {
+          // First try to get projects from the same year
+          existingProjects = await getApprovedProjectsByYear(studentYear);
+        }
+        
+        // If we don't have enough projects from the same year, get from all years
+        if (existingProjects.length < 10) {
+          final allProjectsSnapshot = await _db.collection('approved_projects')
+              .orderBy('approvedAt', descending: true)
+              .limit(100) // Limit to recent 100 projects for performance
+              .get();
+          
+          existingProjects = allProjectsSnapshot.docs.map((doc) {
+            final data = doc.data();
+            data['id'] = doc.id;
+            return data;
+          }).toList();
+        }
+        
+        // Calculate similarity using our similarity service
+        return SimilarityService.calculateSimilarity(
+          title: title,
+          description: description,
+          existingProjects: existingProjects,
+        );
+      },
+      offlineMessage: 'Cannot check project similarity while offline.',
+    ) ?? SimilarityCheckResult(
+      topSimilarProjects: [],
+      suggestedDomain: DomainSuggestion(
+        domain: 'Web Development',
+        confidence: 0.0,
+        supportingProjects: [],
+      ),
+      hasHighSimilarity: false,
+      maxSimilarity: 0.0,
+    );
+  }
+
   Future<void> initializeTeachers() async {
     try {
-      final teachersSnapshot = await _db.collection('teachers').get();
+      // Try to check if teachers collection exists and has data
+      final teachersSnapshot = await _db.collection('teachers').limit(1).get();
 
       if (teachersSnapshot.docs.isEmpty) {
         final teachers = [
           {
             'email': 'teacher1@pvppcoe.ac.in',
             'name': 'Dr. Rajesh Kumar',
-            'uid': 'teacher1_uid',
+            'uid': 'default_teacher_1',
           },
           {
             'email': 'teacher2@pvppcoe.ac.in',
             'name': 'Prof. Priya Sharma',
-            'uid': 'teacher2_uid',
+            'uid': 'default_teacher_2',
           },
           {
             'email': 'teacher3@pvppcoe.ac.in',
             'name': 'Dr. Amit Patel',
-            'uid': 'teacher3_uid',
+            'uid': 'default_teacher_3',
+          },
+          {
+            'email': 'teacher4@pvppcoe.ac.in',
+            'name': 'Prof. Snehal Patil',
+            'uid': 'default_teacher_4',
+          },
+          {
+            'email': 'teacher5@pvppcoe.ac.in',
+            'name': 'Dr. Suresh Mehta',
+            'uid': 'default_teacher_5',
+          },
+          {
+            'email': 'teacher6@pvppcoe.ac.in',
+            'name': 'Prof. Kavita Joshi',
+            'uid': 'default_teacher_6',
           },
         ];
 
+        print('Initializing teachers collection with ${teachers.length} teachers');
         for (var teacher in teachers) {
-          await _db.collection('teachers').doc(teacher['uid'] as String).set(teacher);
+          try {
+            await _db.collection('teachers').doc(teacher['uid'] as String).set(teacher);
+            print('Added teacher: ${teacher['name']}');
+          } catch (docError) {
+            print('Failed to add teacher ${teacher['name']}: $docError');
+          }
         }
+        print('Teachers initialization completed');
+      } else {
+        print('Teachers collection already has data: ${teachersSnapshot.docs.length} teachers');
       }
     } catch (e) {
       print('Error initializing teachers: $e');
+      // Don't rethrow - this is expected to fail in some permission scenarios
     }
   }
 }
