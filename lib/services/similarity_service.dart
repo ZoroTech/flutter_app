@@ -240,46 +240,120 @@ class SimilarityService {
   /// Provide smart domain suggestion based on project content analysis
   static DomainSuggestion _getSmartDefaultDomain(String title, String description) {
     final combinedText = '$title $description'.toLowerCase();
-    
-    // Define domain keywords
+
+    // Define comprehensive domain keywords with weighted importance
     final domainKeywords = {
-      'AI/ML': ['ai', 'artificial intelligence', 'machine learning', 'neural', 'deep learning', 'classification', 'prediction', 'model', 'algorithm', 'tensorflow', 'python', 'data mining', 'nlp', 'computer vision'],
-      'Mobile Development': ['android', 'ios', 'mobile', 'app', 'flutter', 'react native', 'kotlin', 'swift', 'firebase', 'smartphone'],
-      'Web Development': ['web', 'website', 'html', 'css', 'javascript', 'react', 'vue', 'angular', 'node', 'backend', 'frontend', 'api', 'rest', 'http'],
-      'IoT': ['iot', 'internet of things', 'sensor', 'arduino', 'raspberry pi', 'embedded', 'automation', 'smart home', 'wireless', 'bluetooth'],
-      'Data Science': ['data science', 'analytics', 'visualization', 'statistics', 'big data', 'dashboard', 'reporting', 'insights', 'pandas', 'matplotlib'],
-      'Blockchain': ['blockchain', 'cryptocurrency', 'bitcoin', 'ethereum', 'smart contract', 'decentralized', 'crypto', 'ledger'],
-      'Cybersecurity': ['security', 'cybersecurity', 'encryption', 'firewall', 'penetration', 'vulnerability', 'cyber', 'hacking'],
-      'Game Development': ['game', 'gaming', 'unity', 'unreal', '2d', '3d', 'graphics', 'animation'],
+      'AI/ML': {
+        'high': ['machine learning', 'deep learning', 'neural network', 'artificial intelligence', 'computer vision', 'natural language processing', 'nlp', 'convolutional', 'recurrent', 'transformer', 'reinforcement learning'],
+        'medium': ['tensorflow', 'pytorch', 'keras', 'scikit', 'classification', 'regression', 'clustering', 'supervised', 'unsupervised', 'training model', 'dataset', 'feature extraction', 'model training', 'prediction model'],
+        'low': ['ai', 'ml', 'neural', 'predict', 'classify', 'algorithm', 'pattern recognition', 'data mining'],
+      },
+      'Mobile Development': {
+        'high': ['android app', 'ios app', 'mobile application', 'react native', 'flutter app', 'mobile dev'],
+        'medium': ['android', 'ios', 'flutter', 'kotlin', 'swift', 'react native', 'mobile', 'smartphone', 'tablet', 'play store', 'app store', 'cross platform'],
+        'low': ['app', 'mobile ui', 'touch', 'gesture', 'notification'],
+      },
+      'Web Development': {
+        'high': ['web application', 'website development', 'web app', 'web portal', 'online platform', 'web based system'],
+        'medium': ['react', 'angular', 'vue', 'nodejs', 'express', 'django', 'flask', 'spring boot', 'asp.net', 'frontend', 'backend', 'full stack', 'rest api', 'graphql'],
+        'low': ['web', 'website', 'html', 'css', 'javascript', 'http', 'browser', 'responsive', 'server'],
+      },
+      'IoT': {
+        'high': ['internet of things', 'iot system', 'smart device', 'iot platform', 'connected devices'],
+        'medium': ['arduino', 'raspberry pi', 'esp8266', 'esp32', 'sensor network', 'embedded system', 'microcontroller', 'smart home', 'home automation', 'mqtt', 'zigbee'],
+        'low': ['iot', 'sensor', 'actuator', 'embedded', 'wireless', 'bluetooth', 'wifi module', 'remote monitoring'],
+      },
+      'Data Science': {
+        'high': ['data analytics', 'data visualization', 'business intelligence', 'predictive analytics', 'data analysis'],
+        'medium': ['analytics', 'visualization', 'dashboard', 'reporting', 'pandas', 'matplotlib', 'tableau', 'power bi', 'statistical analysis', 'data exploration'],
+        'low': ['data', 'statistics', 'insights', 'chart', 'graph', 'metrics', 'analysis'],
+      },
+      'Blockchain': {
+        'high': ['blockchain', 'smart contract', 'decentralized application', 'dapp', 'cryptocurrency', 'distributed ledger'],
+        'medium': ['ethereum', 'bitcoin', 'solidity', 'web3', 'nft', 'defi', 'crypto wallet', 'consensus'],
+        'low': ['crypto', 'token', 'mining', 'ledger', 'decentralized'],
+      },
+      'Cybersecurity': {
+        'high': ['cybersecurity', 'information security', 'network security', 'security system', 'penetration testing', 'vulnerability assessment'],
+        'medium': ['encryption', 'authentication', 'authorization', 'firewall', 'intrusion detection', 'secure communication', 'cryptography'],
+        'low': ['security', 'secure', 'protection', 'password', 'vulnerability', 'threat'],
+      },
+      'Game Development': {
+        'high': ['game development', 'video game', 'game engine', 'game design'],
+        'medium': ['unity', 'unreal engine', 'godot', 'pygame', 'phaser', '2d game', '3d game', 'multiplayer game'],
+        'low': ['game', 'gaming', 'player', 'level', 'graphics', 'animation', 'gameplay'],
+      },
+      'Database Management': {
+        'high': ['database system', 'database management', 'dbms', 'data warehouse', 'database design'],
+        'medium': ['mysql', 'postgresql', 'mongodb', 'sql server', 'oracle', 'nosql', 'relational database', 'query optimization'],
+        'low': ['database', 'sql', 'query', 'table', 'schema', 'crud'],
+      },
+      'Cloud Computing': {
+        'high': ['cloud computing', 'cloud platform', 'cloud infrastructure', 'cloud based', 'serverless'],
+        'medium': ['aws', 'azure', 'google cloud', 'gcp', 'kubernetes', 'docker', 'microservices', 'cloud deployment'],
+        'low': ['cloud', 'saas', 'paas', 'iaas', 'container'],
+      },
+      'Image Processing': {
+        'high': ['image processing', 'computer vision', 'image recognition', 'object detection', 'image analysis'],
+        'medium': ['opencv', 'image filter', 'image enhancement', 'face detection', 'edge detection', 'segmentation'],
+        'low': ['image', 'vision', 'pixel', 'filter', 'detection'],
+      },
+      'Networking': {
+        'high': ['network management', 'network monitoring', 'network protocol', 'networking system'],
+        'medium': ['tcp', 'udp', 'socket', 'router', 'switch', 'network simulation', 'bandwidth', 'latency'],
+        'low': ['network', 'connection', 'communication', 'protocol', 'packet'],
+      },
     };
-    
-    // Score each domain based on keyword matches
-    final domainScores = <String, int>{};
-    
-    domainKeywords.forEach((domain, keywords) {
-      int score = 0;
-      for (final keyword in keywords) {
+
+    // Score each domain based on keyword matches with weights
+    final domainScores = <String, double>{};
+
+    domainKeywords.forEach((domain, keywordGroups) {
+      double score = 0.0;
+
+      // High priority keywords (weight: 10)
+      for (final keyword in keywordGroups['high'] ?? []) {
         if (combinedText.contains(keyword)) {
-          score += keyword.length > 5 ? 3 : 1; // Give more points for specific keywords
+          score += 10.0;
         }
       }
+
+      // Medium priority keywords (weight: 5)
+      for (final keyword in keywordGroups['medium'] ?? []) {
+        if (combinedText.contains(keyword)) {
+          score += 5.0;
+        }
+      }
+
+      // Low priority keywords (weight: 2)
+      for (final keyword in keywordGroups['low'] ?? []) {
+        if (combinedText.contains(keyword)) {
+          score += 2.0;
+        }
+      }
+
       domainScores[domain] = score;
     });
-    
+
     // Find the highest scoring domain
-    String bestDomain = 'Web Development'; // Default fallback
-    int bestScore = 0;
-    
+    String bestDomain = 'General';
+    double bestScore = 0.0;
+
     domainScores.forEach((domain, score) {
       if (score > bestScore) {
         bestScore = score;
         bestDomain = domain;
       }
     });
-    
+
+    // If score is too low, default to "General" instead of guessing
+    if (bestScore < 4.0) {
+      bestDomain = 'General';
+    }
+
     return DomainSuggestion(
       domain: bestDomain,
-      confidence: bestScore > 0 ? 0.5 : 0.0, // Medium confidence for keyword-based suggestions
+      confidence: bestScore > 0 ? (bestScore / 30.0).clamp(0.0, 1.0) : 0.0,
       supportingProjects: [],
     );
   }
